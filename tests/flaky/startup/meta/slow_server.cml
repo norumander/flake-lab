@@ -1,0 +1,15 @@
+{
+    program: {
+        runner: "elf",
+        binary: "bin/slow_server",
+    },
+    capabilities: [
+        { protocol: "flakelab.echo.Echo" },
+    ],
+    expose: [
+        {
+            protocol: "flakelab.echo.Echo",
+            from: "self",
+        },
+    ],
+}

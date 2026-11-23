@@ -1,0 +1,30 @@
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_cc_test",
+    "fuchsia_unittest_package",
+)
+
+# A test with a build-time switch that makes it slower. See checksum_test.cc.
+
+config_setting(
+    name = "regression",
+    define_values = {"flakelab_regression": "1"},
+)
+
+fuchsia_cc_test(
+    name = "perf_checksum_test",
+    size = "small",
+    srcs = ["checksum_test.cc"],
+    copts = select({
+        ":regression": ["-DFLAKELAB_REGRESSION=1"],
+        "//conditions:default": [],
+    }),
+    deps = ["@com_google_googletest//:gtest_main"],
+)
+
+fuchsia_unittest_package(
+    name = "pkg",
+    package_name = "flakelab_perf",
+    unit_tests = [":perf_checksum_test"],
+    visibility = ["//visibility:public"],
+)

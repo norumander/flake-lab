@@ -1,0 +1,8 @@
+# Fuchsia defaults (bzlmod, API level flag aliases, toolchain resolution).
+try-import %workspace%/third_party/fuchsia-infra-bazel-rules/config/common_config.bazelrc
+
+build --spawn_strategy=standalone
+build --copt=-ffunction-sections
+build --copt=-fdata-sections
+build --override_fuchsia_api_level=31
+build --strategy=FuchsiaPmPublish=local

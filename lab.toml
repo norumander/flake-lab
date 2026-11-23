@@ -1,0 +1,52 @@
+# What the lab runs. Paths may start with ~.
+
+# A product bundle fetched with `ffx product download`. Its version should
+# match the SDK pinned in manifests/bazel_sdk.ensure.
+product_bundle = "~/pb/minimal.x64"
+
+# Controls: these should never fail.
+[[package]]
+target = "//tests/stable:pkg"
+name = "flakelab_stable"
+components = [
+    "stable_math_test",
+    "stable_threads_test",
+    "stable_timer_test",
+    "stable_zircon_test",
+]
+
+# Deliberately flaky, one mechanism per component.
+[[package]]
+target = "//tests/flaky:pkg"
+name = "flakelab_flaky"
+components = [
+    "flaky_boot_test",
+    "flaky_injected_test",
+    "flaky_race_test",
+    "flaky_timing_test",
+]
+
+# Flaky two-component integration test.
+[[package]]
+target = "//tests/flaky/startup:pkg"
+name = "flakelab_startup"
+components = ["flaky_startup_test"]
+
+# Never fails; its duration changes when built with the regression define.
+[[package]]
+target = "//tests/perf:pkg"
+name = "flakelab_perf"
+components = ["perf_checksum_test"]
+
+# Ground truth for scoring the detector, keyed by test case name. Cases not
+# listed here are expected to be stable.
+#   rate  = failure probability built into the test
+#   cause = the pattern the detector should find ("boot", "condition", "load")
+[expect]
+"FlakyInjected.Rate20Percent" = { rate = 0.20 }
+"FlakyInjected.Rate5Percent" = { rate = 0.05 }
+"FlakyInjected.Rate1Percent" = { rate = 0.01 }
+"FlakyRace.LostUpdate" = { flaky = true }
+"FlakyTiming.SleepInsteadOfSync" = { flaky = true }
+"FlakyStartup.ReplyBeforeDeadline" = { flaky = true }
+"FlakyBoot.NeedsWarmDevice" = { cause = "boot" }

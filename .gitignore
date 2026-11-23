@@ -1,0 +1,18 @@
+# Bazel
+bazel-*
+# Downloaded by scripts/bootstrap.sh
+.cipd/
+.cipd_client
+tools/.versions/
+tools/bazel
+tools/shac
+# Lab output
+/out/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+__pycache__/
+.venv/
+# Written by scripts/bootstrap.sh
+shac.star
+shac.textproto

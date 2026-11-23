@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flake lab report</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--page); }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
+h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+h2 { font-size: 16px; font-weight: 600; margin: 0 0 2px; }
+p { margin: 0; }
+.sub { color: var(--text-secondary); margin-bottom: 14px; max-width: 78ch; }
+header { margin-bottom: 20px; }
+header p { color: var(--text-secondary); }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px 16px;
+  margin-top: 16px;
+}
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.tile .label { color: var(--text-secondary); font-size: 13px; }
+.tile .value { font-size: 28px; font-weight: 600; line-height: 1.25; }
+.tile .note { color: var(--text-muted); font-size: 12px; }
+
+.chart { overflow-x: auto; }
+/* Charts are drawn at the container's width and redrawn when it changes. Until
+   the redraw lands they scale down rather than overflow, but never below the
+   680px they need to stay readable; narrower than that, the chart scrolls. */
+.chart svg { display: block; max-width: max(100%, 680px); height: auto; }
+svg text { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-secondary); }
+svg text.name { font-size: 13px; fill: var(--text-primary); }
+svg text.muted { fill: var(--text-muted); }
+svg text.strong { fill: var(--text-primary); font-weight: 600; }
+svg .tick-num { font-variant-numeric: tabular-nums; }
+svg [tabindex]:focus { outline: none; }
+svg [tabindex]:focus-visible .hit { stroke: var(--text-primary); stroke-width: 1.5; }
+.hit { fill: transparent; }
+.lift { opacity: 0.82; }
+
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key i { display: inline-block; }
+.swatch { width: 12px; height: 12px; border-radius: 2px; }
+
+figure { margin: 0 0 18px; }
+figcaption { margin-bottom: 4px; }
+figcaption b { font-weight: 600; }
+figcaption span { color: var(--text-secondary); }
+
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.notes { color: var(--text-secondary); min-width: 220px; }
+.table-wrap { overflow-x: auto; }
+.status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.status i { font-style: normal; font-size: 11px; }
+.status.stable i { color: var(--good); }
+.status.flaky i { color: var(--warning); }
+.status.broken i { color: var(--critical); }
+
+#tooltip {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  padding: 8px 10px;
+  font-size: 12px;
+  max-width: 340px;
+  display: none;
+}
+#tooltip .t-head { color: var(--text-secondary); margin-bottom: 4px; }
+#tooltip .t-row { display: flex; align-items: center; gap: 8px; }
+#tooltip .t-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tooltip .t-row span { color: var(--text-secondary); }
+#tooltip .t-key { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+#tooltip .t-note { color: var(--text-secondary); margin-top: 4px; }
+footer { color: var(--text-secondary); font-size: 13px; margin-top: 22px; max-width: 86ch; }
+footer p + p { margin-top: 6px; }
+</style>
+</head>
+<body class="viz-root">
+<main>
+  <header>
+    <h1>Flake lab report</h1>
+    <p id="subtitle"></p>
+  </header>
+
+  <section class="kpi-row" id="kpis" aria-label="Headline numbers"></section>
+
+  <section class="card">
+    <h2>Failure rate of each test case that failed at least once</h2>
+    <p class="sub">Share of runs that failed, with the range the true rate lies in with 95% confidence. Three cases fail at a rate built into the test, so the estimate can be checked.</p>
+    <div class="key" aria-hidden="true">
+      <span><i class="swatch" style="background:var(--series-1)"></i>measured failure rate</span>
+      <span><i style="width:18px;height:2px;background:var(--text-secondary)"></i>95% interval</span>
+      <span><i style="width:2px;height:14px;background:var(--text-primary)"></i>rate built into the test</span>
+    </div>
+    <div class="chart" id="rate-chart"></div>
+    <details><summary>Data table</summary><div class="table-wrap" id="rate-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>When each of those cases failed</h2>
+    <p class="sub">One row per test case, one mark per failed run, in the order the runs happened. The bottom row marks every emulator start.</p>
+    <div class="chart" id="strip-chart"></div>
+    <details><summary>Data table</summary><div class="table-wrap" id="strip-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>Test cases whose duration changed</h2>
+    <p class="sub">Median duration of passing runs, with the band that holds the middle 80% of them. A vertical line marks each step change the detector found.</p>
+    <div id="duration-charts"></div>
+  </section>
+
+  <section class="card">
+    <h2>Emulator start time, boot by boot</h2>
+    <p class="sub">Wall-clock time of <code>ffx emu start</code>, split with the guest's own clock into three parts.</p>
+    <div class="key" id="boot-key"></div>
+    <div class="chart" id="boot-chart"></div>
+    <details><summary>Data table</summary><div class="table-wrap" id="boot-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>All test cases</h2>
+    <p class="sub">The duration trend is drawn from zero, so a flat line means a steady test.</p>
+    <div class="table-wrap" id="case-table"></div>
+  </section>
+
+  <section class="card">
+    <h2>Sessions</h2>
+    <p class="sub">Each session ran the whole suite under one condition.</p>
+    <div class="table-wrap" id="session-table"></div>
+  </section>
+
+  <footer>
+    <p>A case counts as flaky when it both passed and failed on the same build. Intervals are Wilson score intervals. Patterns in when a case fails are tested with Mann-Whitney and Fisher exact tests at p &lt; 0.01; duration steps with Pettitt's test at p &lt; 0.001 and a shift of at least 10%.</p>
+    <p>Runs that produced no result file are counted as lab errors, never as test failures.</p>
+  </footer>
+</main>
+<div id="tooltip" role="status" aria-live="polite"></div>
+
+<script>const DATA = {"generated":"2026-11-23T22:51:20+00:00","sessions":[{"id":1,"label":"baseline","started":"2026-11-23T22:45:28.147+00:00","ended":"2026-11-23T22:48:34.007+00:00","sdk":"34.20261122.0.1","product":"34.20261122.0.1","cpus":32,"mem_mb":15838,"kvm":true,"args":{"define":[],"host_stress":0,"iterations":300,"restart_every":30,"run_timeout":120}},{"id":2,"label":"busy host","started":"2026-11-23T22:48:34.332+00:00","ended":"2026-11-23T22:51:19.704+00:00","sdk":"34.20261122.0.1","product":"34.20261122.0.1","cpus":32,"mem_mb":15838,"kvm":true,"args":{"define":[],"host_stress":64,"iterations":100,"restart_every":25,"run_timeout":120}}],"suite_runs":400,"case_runs":2000,"infra_errors":{},"segments":[{"session":1,"label":"baseline","start":0,"end":300},{"session":2,"label":"busy host","start":300,"end":400}],"boot_starts":[0,30,60,90,120,150,180,210,240,270,300,325,350,375],"positions":[{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"baseline"},{"since_boot":1,"label":"baseline"},{"since_boot":2,"label":"baseline"},{"since_boot":3,"label":"baseline"},{"since_boot":4,"label":"baseline"},{"since_boot":5,"label":"baseline"},{"since_boot":6,"label":"baseline"},{"since_boot":7,"label":"baseline"},{"since_boot":8,"label":"baseline"},{"since_boot":9,"label":"baseline"},{"since_boot":10,"label":"baseline"},{"since_boot":11,"label":"baseline"},{"since_boot":12,"label":"baseline"},{"since_boot":13,"label":"baseline"},{"since_boot":14,"label":"baseline"},{"since_boot":15,"label":"baseline"},{"since_boot":16,"label":"baseline"},{"since_boot":17,"label":"baseline"},{"since_boot":18,"label":"baseline"},{"since_boot":19,"label":"baseline"},{"since_boot":20,"label":"baseline"},{"since_boot":21,"label":"baseline"},{"since_boot":22,"label":"baseline"},{"since_boot":23,"label":"baseline"},{"since_boot":24,"label":"baseline"},{"since_boot":25,"label":"baseline"},{"since_boot":26,"label":"baseline"},{"since_boot":27,"label":"baseline"},{"since_boot":28,"label":"baseline"},{"since_boot":29,"label":"baseline"},{"since_boot":0,"label":"busy host"},{"since_boot":1,"label":"busy host"},{"since_boot":2,"label":"busy host"},{"since_boot":3,"label":"busy host"},{"since_boot":4,"label":"busy host"},{"since_boot":5,"label":"busy host"},{"since_boot":6,"label":"busy host"},{"since_boot":7,"label":"busy host"},{"since_boot":8,"label":"busy host"},{"since_boot":9,"label":"busy host"},{"since_boot":10,"label":"busy host"},{"since_boot":11,"label":"busy host"},{"since_boot":12,"label":"busy host"},{"since_boot":13,"label":"busy host"},{"since_boot":14,"label":"busy host"},{"since_boot":15,"label":"busy host"},{"since_boot":16,"label":"busy host"},{"since_boot":17,"label":"busy host"},{"since_boot":18,"label":"busy host"},{"since_boot":19,"label":"busy host"},{"since_boot":20,"label":"busy host"},{"since_boot":21,"label":"busy host"},{"since_boot":22,"label":"busy host"},{"since_boot":23,"label":"busy host"},{"since_boot":24,"label":"busy host"},{"since_boot":0,"label":"busy host"},{"since_boot":1,"label":"busy host"},{"since_boot":2,"label":"busy host"},{"since_boot":3,"label":"busy host"},{"since_boot":4,"label":"busy host"},{"since_boot":5,"label":"busy host"},{"since_boot":6,"label":"busy host"},{"since_boot":7,"label":"busy host"},{"since_boot":8,"label":"busy host"},{"since_boot":9,"label":"busy host"},{"since_boot":10,"label":"busy host"},{"since_boot":11,"label":"busy host"},{"since_boot":12,"label":"busy host"},{"since_boot":13,"label":"busy host"},{"since_boot":14,"label":"busy host"},{"since_boot":15,"label":"busy host"},{"since_boot":16,"label":"busy host"},{"since_boot":17,"label":"busy host"},{"since_boot":18,"label":"busy host"},{"since_boot":19,"label":"busy host"},{"since_boot":20,"label":"busy host"},{"since_boot":21,"label":"busy host"},{"since_boot":22,"label":"busy host"},{"since_boot":23,"label":"busy host"},{"since_boot":24,"label":"busy host"},{"since_boot":0,"label":"busy host"},{"since_boot":1,"label":"busy host"},{"since_boot":2,"label":"busy host"},{"since_boot":3,"label":"busy host"},{"since_boot":4,"label":"busy host"},{"since_boot":5,"label":"busy host"},{"since_boot":6,"label":"busy host"},{"since_boot":7,"label":"busy host"},{"since_boot":8,"label":"busy host"},{"since_boot":9,"label":"busy host"},{"since_boot":10,"label":"busy host"},{"since_boot":11,"label":"busy host"},{"since_boot":12,"label":"busy host"},{"since_boot":13,"label":"busy host"},{"since_boot":14,"label":"busy host"},{"since_boot":15,"label":"busy host"},{"since_boot":16,"label":"busy host"},{"since_boot":17,"label":"busy host"},{"since_boot":18,"label":"busy host"},{"since_boot":19,"label":"busy host"},{"since_boot":20,"label":"busy host"},{"since_boot":21,"label":"busy host"},{"since_boot":22,"label":"busy host"},{"since_boot":23,"label":"busy host"},{"since_boot":24,"label":"busy host"},{"since_boot":0,"label":"busy host"},{"since_boot":1,"label":"busy host"},{"since_boot":2,"label":"busy host"},{"since_boot":3,"label":"busy host"},{"since_boot":4,"label":"busy host"},{"since_boot":5,"label":"busy host"},{"since_boot":6,"label":"busy host"},{"since_boot":7,"label":"busy host"},{"since_boot":8,"label":"busy host"},{"since_boot":9,"label":"busy host"},{"since_boot":10,"label":"busy host"},{"since_boot":11,"label":"busy host"},{"since_boot":12,"label":"busy host"},{"since_boot":13,"label":"busy host"},{"since_boot":14,"label":"busy host"},{"since_boot":15,"label":"busy host"},{"since_boot":16,"label":"busy host"},{"since_boot":17,"label":"busy host"},{"since_boot":18,"label":"busy host"},{"since_boot":19,"label":"busy host"},{"since_boot":20,"label":"busy host"},{"since_boot":21,"label":"busy host"},{"since_boot":22,"label":"busy host"},{"since_boot":23,"label":"busy host"},{"since_boot":24,"label":"busy host"}],"cases":[{"name":"DeviceTest.test_core_components_exist","suite":"host/device_test","verdict":"stable","runs":400,"failures":0,"rate":0.0,"ci":[0.0,0.009512294334296508],"first_failure":null,"masked_by_retry":null,"hints":[],"expected_flaky":false,"expected_rate":null,"by_label":{},"median_ms":33.0,"outliers":0,"steps":[{"at":300,"at_session_start":true,"label":"busy host","before":32.0,"after":121.0,"relative":2.78125}],"fails":[],"bins":[[0,3,31,32.5,36],[4,7,30,31.5,33],[8,11,29,30.5,33],[12,15,30,31.5,33],[16,19,32,33.0,34],[20,23,31,31.5,36],[24,27,31,33.0,33],[28,31,29,31.5,33],[32,35,32,32.5,35],[36,39,29,30.5,34],[40,43,29,31.5,33],[44,47,30,31.0,33],[48,51,29,30.0,33],[52,55,30,32.0,34],[56,59,30,32.0,33],[60,63,29,32.0,33],[64,67,27,28.5,30],[68,71,31,31.5,33],[72,75,30,32.0,35],[76,79,31,32.0,36],[80,83,30,31.0,33],[84,87,29,30.5,32],[88,91,29,30.0,33],[92,95,32,33.5,35],[96,99,28,29.5,32],[100,103,30,31.0,33],[104,107,29,30.0,31],[108,111,30,32.0,33],[112,115,31,32.5,36],[116,119,30,30.5,31],[120,123,32,36.0,53],[124,127,30,30.5,36],[128,131,29,33.0,36],[132,135,32,33.5,37],[136,139,31,31.0,32],[140,143,30,31.5,35],[144,147,29,31.0,32],[148,151,30,32.5,35],[152,155,31,32.0,33],[156,159,29,32.0,34],[160,163,32,33.5,34],[164,167,32,33.0,36],[168,171,32,34.0,35],[172,175,29,30.5,33],[176,179,28,30.0,32],[180,183,30,31.5,34],[184,187,29,30.5,33],[188,191,31,33.0,33],[192,195,29,32.5,36],[196,199,28,29.5,30],[200,203,30,30.5,33],[204,207,29,31.5,37],[208,211,29,30.0,35],[212,215,31,34.0,35],[216,219,30,32.5,37],[220,223,28,29.5,32],[224,227,30,32.5,35],[228,231,31,32.0,35],[232,235,32,32.5,35],[236,239,31,32.5,34],[240,243,30,30.5,32],[244,247,29,29.0,30],[248,251,32,32.5,35],[252,255,31,31.5,33],[256,259,31,32.0,33],[260,263,30,32.0,35],[264,267,30,33.5,35],[268,271,29,30.5,52],[272,275,30,32.0,33],[276,279,27,30.0,34],[280,283,31,32.0,33],[284,287,28,31.5,34],[288,291,28,30.5,34],[292,295,29,30.5,37],[296,299,31,31.5,34],[300,303,113,130.5,140],[304,307,112,123.5,144],[308,311,107,109.5,112],[312,315,95,110.0,146],[316,319,108,118.5,148],[320,323,98,134.5,168],[324,327,93,116.5,146],[328,331,109,119.5,133],[332,335,97,117.5,153],[336,339,91,124.0,136],[340,343,89,144.5,170],[344,347,84,130.5,182],[348,351,138,152.5,182],[352,355,104,109.0,115],[356,359,86,111.0,130],[360,363,90,112.5,131],[364,367,96,128.5,148],[368,371,122,128.0,153],[372,375,90,125.5,167],[376,379,120,129.5,150],[380,383,106,111.5,117],[384,387,96,113.0,124],[388,391,94,102.5,218],[392,395,120,122.0,131],[396,399,112,122.0,144]]},{"name":"DeviceTest.test_log_message_reaches_the_device_log","suite":"host/device_test","verdict":"stable","runs":400,"failures":0,"rate":0.0,"ci":[0.0,0.009512294334296508],"first_failure":null,"masked_by_retry":null,"hints":[],"expected_flaky":false,"expected_rate":null,"by_label":{},"median_ms":85.0,"outliers":0,"steps":[{"at":300,"at_session_start":true,"label":"busy host","before":83.0,"after":318.0,"relative":2.8313253012048194}],"fails":[],"bins":[[0,3,76,87.0,89],[4,7,80,80.5,81],[8,11,75,81.5,88],[12,15,80,84.0,94],[16,19,84,85.5,88],[20,23,80,83.0,93],[24,27,83,85.5,94],[28,31,79,80.5,88],[32,35,79,86.5,90],[36,39,81,84.0,87],[40,43,78,84.0,86],[44,47,76,83.0,86],[48,51,82,86.5,221],[52,55,85,86.0,95],[56,59,83,85.5,86],[60,63,81,84.0,86],[64,67,72,80.5,87],[68,71,83,86.0,91],[72,75,78,81.5,83],[76,79,75,79.5,91],[80,83,76,80.0,82],[84,87,80,82.5,86],[88,91,81,86.5,87],[92,95,82,87.5,89],[96,99,81,82.0,89],[100,103,80,82.5,88],[104,107,80,83.5,88],[108,111,76,80.5,83],[112,115,82,84.0,86],[116,119,79,83.0,87],[120,123,79,83.0,87],[124,127,83,87.0,92],[128,131,81,83.5,93],[132,135,78,80.0,82],[136,139,81,83.5,90],[140,143,75,80.0,82],[144,147,79,82.5,84],[148,151,81,83.0,86],[152,155,76,81.0,88],[156,159,81,83.0,87],[160,163,75,79.0,87],[164,167,76,78.0,85],[168,171,80,84.0,88],[172,175,79,82.0,87],[176,179,77,83.0,91],[180,183,79,84.0,89],[184,187,78,84.5,90],[188,191,75,80.5,87],[192,195,72,79.0,82],[196,199,78,81.0,83],[200,203,80,85.5,93],[204,207,83,85.5,88],[208,211,80,80.5,84],[212,215,82,86.0,87],[216,219,83,88.0,91],[220,223,78,86.5,87],[224,227,82,83.0,88],[228,231,73,77.5,83],[232,235,80,81.5,83],[236,239,79,82.5,92],[240,243,80,82.5,85],[244,247,80,81.5,85],[248,251,77,82.5,85],[252,255,81,84.0,85],[256,259,82,83.5,91],[260,263,85,86.0,88],[264,267,80,83.0,85],[268,271,72,80.0,85],[272,275,81,86.5,91],[276,279,79,83.0,87],[280,283,79,79.5,80],[284,287,74,81.0,88],[288,291,84,85.0,86],[292,295,79,84.0,88],[296,299,72,79.0,81],[300,303,316,385.5,464],[304,307,281,326.0,429],[308,311,279,313.5,353],[312,315,260,328.0,373],[316,319,245,361.0,410],[320,323,313,363.5,447],[324,327,303,358.0,465],[328,331,280,306.5,326],[332,335,297,320.5,404],[336,339,294,311.0,394],[340,343,312,364.0,436],[344,347,295,407.5,467],[348,351,252,295.0,323],[352,355,314,343.5,364],[356,359,291,334.0,404],[360,363,307,340.0,358],[364,367,237,279.0,295],[368,371,260,286.5,300],[372,375,320,346.0,466],[376,379,312,384.5,399],[380,383,279,298.5,334],[384,387,241,261.0,270],[388,391,245,271.0,315],[392,395,261,282.0,305],[396,399,363,398.0,417]]},{"name":"DeviceTest.test_remote_control_echoes","suite":"host/device_test","verdict":"stable","runs":400,"failures":0,"rate":0.0,"ci":[0.0,0.009512294334296508],"first_failure":null,"masked_by_retry":null,"hints":[],"expected_flaky":false,"expected_rate":null,"by_label":{},"median_ms":28.0,"outliers":0,"steps":[{"at":300,"at_session_start":true,"label":"busy host","before":27.0,"after":84.0,"relative":2.111111111111111}],"fails":[],"bins":[[0,3,26,27.0,31],[4,7,22,27.5,30],[8,11,27,28.0,29],[12,15,22,28.5,33],[16,19,24,27.0,31],[20,23,27,27.0,33],[24,27,25,28.0,31],[28,31,21,26.0,28],[32,35,26,27.0,28],[36,39,21,28.5,30],[40,43,26,27.5,30],[44,47,21,25.0,30],[48,51,26,26.5,29],[52,55,26,27.5,36],[56,59,26,26.0,28],[60,63,26,28.5,35],[64,67,25,27.0,29],[68,71,25,27.0,32],[72,75,22,24.0,33],[76,79,24,30.0,43],[80,83,22,25.5,29],[84,87,27,28.0,35],[88,91,27,31.0,33],[92,95,27,31.0,37],[96,99,26,27.0,33],[100,103,25,26.0,28],[104,107,25,25.5,28],[108,111,26,27.5,30],[112,115,26,27.0,28],[116,119,26,26.5,29],[120,123,29,31.0,35],[124,127,24,30.0,34],[128,131,25,26.5,29],[132,135,22,26.0,27],[136,139,27,28.0,29],[140,143,25,27.0,29],[144,147,26,27.5,29],[148,151,25,28.0,31],[152,155,25,28.0,32],[156,159,26,26.0,29],[160,163,22,26.5,28],[164,167,22,29.0,32],[168,171,27,28.0,31],[172,175,22,27.0,36],[176,179,28,31.0,33],[180,183,22,28.5,61],[184,187,25,26.5,29],[188,191,22,29.5,32],[192,195,21,26.0,31],[196,199,26,28.0,33],[200,203,26,30.5,34],[204,207,21,26.0,33],[208,211,26,28.5,30],[212,215,22,26.0,32],[216,219,25,30.5,33],[220,223,27,27.5,30],[224,227,27,28.0,29],[228,231,21,26.5,30],[232,235,26,29.5,33],[236,239,28,30.5,36],[240,243,26,28.0,29],[244,247,27,29.0,31],[248,251,23,24.5,29],[252,255,28,29.0,31],[256,259,21,25.0,29],[260,263,22,28.5,34],[264,267,26,27.5,33],[268,271,25,28.0,31],[272,275,22,25.0,27],[276,279,25,27.5,33],[280,283,23,25.5,27],[284,287,23,28.0,29],[288,291,24,25.5,26],[292,295,26,28.0,31],[296,299,27,28.0,29],[300,303,83,90.5,109],[304,307,61,67.5,77],[308,311,57,67.0,79],[312,315,85,93.5,128],[316,319,68,88.5,97],[320,323,78,90.5,98],[324,327,71,77.5,89],[328,331,70,75.0,80],[332,335,72,80.0,101],[336,339,75,82.5,88],[340,343,95,100.0,125],[344,347,74,106.5,125],[348,351,85,86.5,102],[352,355,68,87.0,103],[356,359,65,75.5,109],[360,363,64,78.5,83],[364,367,62,93.0,108],[368,371,79,86.5,95],[372,375,78,98.0,118],[376,379,86,93.5,102],[380,383,81,82.5,108],[384,387,65,84.0,100],[388,391,66,76.0,94],[392,395,75,81.5,91],[396,399,81,95.5,135]]},{"name":"DeviceTest.test_uptime_advances","suite":"host/device_test","verdict":"stable","runs":400,"failures":0,"rate":0.0,"ci":[0.0,0.009512294334296508],"first_failure":null,"masked_by_retry":null,"hints":[],"expected_flaky":false,"expected_rate":null,"by_label":{},"median_ms":56.0,"outliers":0,"steps":[{"at":300,"at_session_start":true,"label":"busy host","before":56.0,"after":166.0,"relative":1.9642857142857142}],"fails":[],"bins":[[0,3,51,60.0,64],[4,7,47,55.0,56],[8,11,51,56.0,57],[12,15,54,57.0,59],[16,19,46,54.0,64],[20,23,56,60.0,64],[24,27,53,56.0,59],[28,31,56,56.0,56],[32,35,48,53.5,56],[36,39,48,54.0,59],[40,43,56,56.0,57],[44,47,49,52.0,56],[48,51,50,56.0,60],[52,55,48,52.0,60],[56,59,54,56.0,64],[60,63,56,56.0,60],[64,67,48,56.0,57],[68,71,50,56.0,64],[72,75,49,52.5,55],[76,79,48,56.0,56],[80,83,48,54.5,68],[84,87,48,54.0,60],[88,91,51,57.5,60],[92,95,48,55.5,60],[96,99,56,56.0,59],[100,103,56,56.0,60],[104,107,56,56.0,60],[108,111,50,56.0,56],[112,115,48,55.5,56],[116,119,52,56.0,56],[120,123,56,56.0,63],[124,127,47,60.0,61],[128,131,56,60.0,60],[132,135,50,56.0,60],[136,139,56,58.0,60],[140,143,56,56.0,56],[144,147,56,56.0,56],[148,151,48,58.0,64],[152,155,56,56.0,60],[156,159,56,56.0,60],[160,163,53,56.0,59],[164,167,52,54.0,56],[168,171,54,58.0,60],[172,175,55,58.0,68],[176,179,44,55.5,60],[180,183,48,58.5,68],[184,187,47,56.0,60],[188,191,44,60.0,67],[192,195,50,54.0,58],[196,199,48,56.5,64],[200,203,56,60.0,64],[204,207,53,56.0,63],[208,211,50,54.5,76],[212,215,48,54.0,63],[216,219,60,60.0,60],[220,223,48,53.5,56],[224,227,48,56.0,59],[228,231,42,54.5,56],[232,235,56,56.0,64],[236,239,52,56.0,60],[240,243,56,56.0,56],[244,247,52,56.0,60],[248,251,55,58.0,60],[252,255,56,56.0,60],[256,259,54,56.0,60],[260,263,54,57.0,63],[264,267,55,59.5,60],[268,271,49,56.0,60],[272,275,49,58.5,60],[276,279,50,55.0,60],[280,283,46,57.0,60],[284,287,55,56.0,61],[288,291,44,55.0,56],[292,295,51,56.0,56],[296,299,47,54.0,60],[300,303,140,154.0,251],[304,307,151,168.0,203],[308,311,146,173.5,189],[312,315,154,177.0,202],[316,319,161,176.5,198],[320,323,173,176.0,207],[324,327,163,178.0,212],[328,331,156,161.5,165],[332,335,155,157.5,174],[336,339,135,154.5,185],[340,343,153,166.5,192],[344,347,152,168.5,196],[348,351,154,172.5,203],[352,355,140,163.5,189],[356,359,121,186.0,214],[360,363,147,154.5,188],[364,367,145,163.0,194],[368,371,147,157.0,181],[372,375,163,172.0,184],[376,379,135,165.5,202],[380,383,160,182.0,195],[384,387,129,156.0,301],[388,391,127,150.5,164],[392,395,135,172.5,180],[396,399,145,182.5,224]]},{"name":"FlakyHostTest.test_echo_within_budget","suite":"host/device_test","verdict":"flaky","runs":400,"failures":113,"rate":0.2825,"ci":[0.24061027235147464,0.32852757568394425],"first_failure":70,"masked_by_retry":0.10714285714285714,"hints":["rate differs by condition: 13/300 under 'baseline' vs 100/100 under 'busy host' (p=1.7e-80)"],"expected_flaky":true,"expected_rate":null,"by_label":{"baseline":[13,300],"busy host":[100,100]},"median_ms":27,"outliers":0,"steps":[],"fails":[69,70,76,89,93,120,131,164,175,188,191,243,267,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381,382,383,384,385,386,387,388,389,390,391,392,393,394,395,396,397,398,399],"bins":[[0,3,22,27.5,30],[4,7,22,24.5,28],[8,11,22,25.5,27],[12,15,22,27.5,31],[16,19,30,30.5,31],[20,23,26,28.0,30],[24,27,23,24.5,26],[28,31,26,27.0,27],[32,35,21,27.0,27],[36,39,21,24.0,26],[40,43,21,26.5,27],[44,47,26,27.0,28],[48,51,22,27.5,30],[52,55,22,24.0,30],[56,59,22,28.5,31],[60,63,26,26.5,27],[64,67,22,25.5,31],[68,71,27,28.0,29],[72,75,21,26.0,27],[76,79,21,22,27],[80,83,27,27.0,30],[84,87,23,26.5,27],[88,91,26,27,28],[92,95,26,27,27],[96,99,23,26.5,31],[100,103,26,27.0,28],[104,107,27,28.5,31],[108,111,22,26.0,27],[112,115,26,26.5,27],[116,119,22,26.5,27],[120,123,27,27,27],[124,127,26,26.5,31],[128,131,22,27,27],[132,135,22,26.5,28],[136,139,26,28.5,31],[140,143,26,26.0,27],[144,147,26,27.0,27],[148,151,21,26.0,27],[152,155,26,26.5,31],[156,159,26,27.0,27],[160,163,21,24.5,31],[164,167,26,27,30],[168,171,26,30.0,31],[172,175,27,29,30],[176,179,26,28.5,31],[180,183,26,29.0,31],[184,187,22,24.5,27],[188,191,27,27.0,27],[192,195,26,27.0,31],[196,199,26,27.5,31],[200,203,26,27.0,30],[204,207,26,26.5,31],[208,211,25,26.0,27],[212,215,21,26.0,27],[216,219,26,27.0,31],[220,223,22,26.5,30],[224,227,22,24.5,27],[228,231,25,26.0,27],[232,235,27,28.5,31],[236,239,26,27.0,27],[240,243,26,26,27],[244,247,25,26.0,30],[248,251,26,26.5,30],[252,255,21,27.0,31],[256,259,22,27.0,30],[260,263,21,27.0,31],[264,267,22,26,27],[268,271,26,26.0,27],[272,275,22,26.0,27],[276,279,26,27.0,28],[280,283,27,27.5,31],[284,287,21,26.5,27],[288,291,21,26.5,28],[292,295,21,26.5,27],[296,299,22,24.0,31]]}],"boots":[{"id":1,"label":"baseline","ok":true,"total":14877,"launch":815,"guest":1541,"wait":12521},{"id":2,"label":"baseline","ok":true,"total":14909,"launch":830,"guest":1536,"wait":12543},{"id":3,"label":"baseline","ok":true,"total":7949,"launch":867,"guest":1615,"wait":5467},{"id":4,"label":"baseline","ok":true,"total":7919,"launch":801,"guest":1556,"wait":5562},{"id":5,"label":"baseline","ok":true,"total":7995,"launch":832,"guest":1607,"wait":5556},{"id":6,"label":"baseline","ok":true,"total":7930,"launch":868,"guest":1579,"wait":5483},{"id":7,"label":"baseline","ok":true,"total":7994,"launch":770,"guest":1504,"wait":5720},{"id":8,"label":"baseline","ok":true,"total":7990,"launch":756,"guest":1549,"wait":5685},{"id":9,"label":"baseline","ok":true,"total":7961,"launch":751,"guest":1537,"wait":5673},{"id":10,"label":"baseline","ok":true,"total":7974,"launch":751,"guest":1557,"wait":5666},{"id":11,"label":"busy host","ok":true,"total":16180,"launch":2421,"guest":3730,"wait":10029},{"id":12,"label":"busy host","ok":true,"total":16003,"launch":2134,"guest":3497,"wait":10372},{"id":13,"label":"busy host","ok":true,"total":16076,"launch":2130,"guest":3389,"wait":10557},{"id":14,"label":"busy host","ok":true,"total":16285,"launch":2753,"guest":3236,"wait":10296}],"boot_groups":[{"label":"baseline","boots":10,"median":7982.0,"min":7919,"max":14909,"launch":808.0,"guest":1552.5,"wait":5669.5,"slow":2},{"label":"busy host","boots":4,"median":16128.0,"min":16003,"max":16285,"launch":2277.5,"guest":3443.0,"wait":10334.0,"slow":4}],"evaluation":{"true_positives":1,"false_positives":[],"false_negatives":[],"true_negatives":4,"rates_checked":0,"rates_covered":0,"causes_checked":0,"causes_found":0}};</script>
+<script>
+"use strict";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+
+function el(tag, props, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v);
+  }
+  for (const child of children) node.append(child);
+  return node;
+}
+function svg(tag, attrs, text) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+const num = (n) => n.toLocaleString("en-US");
+const pct = (x, digits = 1) => (100 * x).toFixed(digits) + "%";
+const secs = (ms) => (ms / 1000).toFixed(2) + " s";
+const msText = (ms) => (ms >= 100 ? Math.round(ms) : Math.round(ms * 10) / 10) + " ms";
+
+function niceStep(max, target) {
+  const raw = max / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
+function ticks(max, target) {
+  const step = niceStep(max, target);
+  const out = [];
+  for (let v = 0; v <= max + step * 1e-9; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  return out;
+}
+
+/* ---------- tooltip ---------- */
+const tip = $("tooltip");
+function tipRow(value, label, color) {
+  const row = el("div", { class: "t-row" });
+  if (color) { const key = el("i", { class: "t-key" }); key.style.background = color; row.append(key); }
+  row.append(el("b", { text: value }), el("span", { text: label }));
+  return row;
+}
+function showTip(x, y, head, rows, note) {
+  tip.replaceChildren();
+  if (head) tip.append(el("div", { class: "t-head", text: head }));
+  for (const r of rows) tip.append(r);
+  if (note) tip.append(el("div", { class: "t-note", text: note }));
+  tip.style.display = "block";
+  const box = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + box.width > window.innerWidth - 8) left = x - box.width - 14;
+  if (top + box.height > window.innerHeight - 8) top = y - box.height - 14;
+  tip.style.left = Math.max(8, left) + "px";
+  tip.style.top = Math.max(8, top) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function bindTip(node, build) {
+  node.addEventListener("pointermove", (e) => { const t = build(); showTip(e.clientX, e.clientY, t.head, t.rows, t.note); });
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("focus", () => {
+    const b = node.getBoundingClientRect(); const t = build();
+    showTip(b.left + b.width / 2, b.top + b.height / 2, t.head, t.rows, t.note);
+  });
+  node.addEventListener("blur", hideTip);
+}
+
+/* ---------- shared pieces ---------- */
+function table(headers, rows) {
+  const t = el("table");
+  const head = el("tr");
+  for (const h of headers) head.append(el("th", { class: h.num ? "num" : "", text: h.label, scope: "col" }));
+  t.append(el("thead", null, head));
+  const body = el("tbody");
+  for (const r of rows) {
+    const tr = el("tr");
+    r.forEach((cell, i) => {
+      const td = el("td", { class: headers[i].num ? "num" : headers[i].cls || "" });
+      if (cell instanceof Node) td.append(cell); else td.textContent = cell;
+      tr.append(td);
+    });
+    body.append(tr);
+  }
+  t.append(body);
+  return t;
+}
+function mount(id, node) { $(id).replaceChildren(node); }
+function widthOf(id, min) { return Math.max(min, Math.floor($(id).clientWidth)); }
+
+/* Session bands along the top of a plot: a label per segment, a hairline between. */
+function sessionBands(g, segments, x, top, bottom, labelY) {
+  segments.forEach((seg, i) => {
+    const x0 = x(seg.start), x1 = x(seg.end);
+    if (i > 0) g.append(svg("line", { x1: x0, x2: x0, y1: top, y2: bottom, stroke: "var(--axis)", "stroke-width": 1 }));
+    // A name that does not fit its band is cut short; the tables give it in full.
+    const full = seg.label || "session " + seg.session;
+    const room = Math.floor((x1 - x0 - 8) / 6.6);
+    const name = full.length <= room ? full : room >= 4 ? full.slice(0, room - 1) + "\u2026" : "";
+    if (name) g.append(svg("text", { x: x0 + 4, y: labelY, class: "muted" }, name));
+  });
+}
+
+const failing = DATA.cases.filter((c) => c.failures > 0).sort((a, b) => b.rate - a.rate);
+const N = DATA.positions.length;
+
+/* ---------- headline numbers ---------- */
+function drawKpis() {
+  const e = DATA.evaluation, b = DATA.boot_groups[0];
+  const tiles = [];
+  const add = (label, value, note) => tiles.push(el("div", { class: "tile" },
+    el("div", { class: "label", text: label }), el("div", { class: "value", text: value }),
+    el("div", { class: "note", text: note || "" })));
+  add("Suite runs", num(DATA.suite_runs), num(DATA.case_runs) + " test case runs");
+  if (e) {
+    const expected = e.true_positives + e.false_negatives.length;
+    add("Flaky cases found", e.true_positives + " of " + expected, "cases written to be flaky");
+    add("False alarms", String(e.false_positives.length),
+        "among " + (e.true_negatives + e.false_positives.length) + " cases expected to be stable");
+  } else {
+    add("Cases that failed", String(failing.length), "of " + DATA.cases.length + " test cases");
+  }
+  const lost = Object.values(DATA.infra_errors).reduce((a, v) => a + v, 0);
+  add("Runs without a result", num(lost), "lab errors, not test failures");
+  if (b && b.median != null) add("Emulator start, median", secs(b.median), `${b.boots} boots under ${b.label || "the first condition"}, slowest ${secs(b.max)}`);
+  if (b && b.wait != null && b.median) add("Start time spent waiting", pct(b.wait / b.median, 0), "guest network already up, ffx not yet ready");
+  $("kpis").replaceChildren(...tiles);
+}
+
+/* ---------- failure rates ---------- */
+function drawRates() {
+  if (!failing.length) { mount("rate-chart", el("p", { class: "sub", text: "No test case failed." })); return; }
+  const W = widthOf("rate-chart", 680);
+  const labelW = 262, valueW = 60, rowH = 34, top = 6, axisH = 26;
+  const plotW = W - labelW - valueW;
+  const maxV = Math.max(...failing.map((c) => Math.max(c.ci[1], c.expected_rate || 0)));
+  const tk = ticks(maxV, 5);
+  const xMax = Math.max(tk[tk.length - 1], maxV);
+  const x = (v) => labelW + (v / xMax) * plotW;
+  const H = top + failing.length * rowH + axisH;
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": "Failure rate per test case" });
+  for (const t of tk) {
+    root.append(svg("line", { x1: x(t), x2: x(t), y1: top, y2: H - axisH, stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: x(t), y: H - 8, "text-anchor": "middle", class: "tick-num muted" }, pct(t, 0)));
+  }
+  failing.forEach((c, i) => {
+    const y = top + i * rowH, mid = y + rowH / 2;
+    const g = svg("g", { tabindex: 0, role: "img",
+      "aria-label": `${c.name}: failed ${c.failures} of ${c.runs} runs, ${pct(c.rate)}, 95% interval ${pct(c.ci[0])} to ${pct(c.ci[1])}` });
+    g.append(svg("text", { x: labelW - 12, y: mid + 4, "text-anchor": "end", class: "name" }, c.name));
+    const w = Math.max(1, x(c.rate) - x(0)), h = 14, r = Math.min(4, w);
+    const bar = svg("path", { fill: "var(--series-1)",
+      d: `M${x(0)},${mid - h / 2} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${h - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(w - r)} z` });
+    g.append(bar);
+    g.append(svg("line", { x1: x(c.ci[0]), x2: x(c.ci[1]), y1: mid, y2: mid, stroke: "var(--text-secondary)", "stroke-width": 2 }));
+    for (const v of c.ci) g.append(svg("line", { x1: x(v), x2: x(v), y1: mid - 4, y2: mid + 4, stroke: "var(--text-secondary)", "stroke-width": 2 }));
+    if (c.expected_rate != null) {
+      g.append(svg("line", { x1: x(c.expected_rate), x2: x(c.expected_rate), y1: mid - 12, y2: mid + 12, stroke: "var(--surface-1)", "stroke-width": 6 }));
+      g.append(svg("line", { x1: x(c.expected_rate), x2: x(c.expected_rate), y1: mid - 12, y2: mid + 12, stroke: "var(--text-primary)", "stroke-width": 2 }));
+    }
+    g.append(svg("text", { x: W - 4, y: mid + 4, "text-anchor": "end", class: "strong tick-num" }, pct(c.rate)));
+    g.append(svg("rect", { class: "hit", x: 0, y: y + 1, width: W, height: rowH - 2, rx: 4 }));
+    g.addEventListener("pointerenter", () => bar.classList.add("lift"));
+    g.addEventListener("pointerleave", () => bar.classList.remove("lift"));
+    bindTip(g, () => {
+      const rows = [tipRow(pct(c.rate), `failed ${num(c.failures)} of ${num(c.runs)} runs`, "var(--series-1)"),
+                    tipRow(`${pct(c.ci[0])} to ${pct(c.ci[1])}`, "95% interval")];
+      if (c.expected_rate != null) rows.push(tipRow(pct(c.expected_rate, 0), "rate built into the test"));
+      if (c.first_failure != null) rows.push(tipRow("run " + num(c.first_failure), "first failure"));
+      if (c.masked_by_retry != null) rows.push(tipRow(pct(c.masked_by_retry, 0), "of failures passed on the next run"));
+      return { head: c.name, rows, note: c.hints.join(" · ") };
+    });
+    root.append(g);
+  });
+  mount("rate-chart", root);
+}
+function drawRateTable() {
+  mount("rate-table", table(
+    [{ label: "Test case" }, { label: "Runs", num: 1 }, { label: "Failed", num: 1 }, { label: "Rate", num: 1 },
+     { label: "95% interval", num: 1 }, { label: "Built-in rate", num: 1 }, { label: "First failure at run", num: 1 },
+     { label: "Failures that passed on the next run", num: 1 }],
+    failing.map((c) => [c.name, num(c.runs), num(c.failures), pct(c.rate), `${pct(c.ci[0])} to ${pct(c.ci[1])}`,
+      c.expected_rate != null ? pct(c.expected_rate, 0) : "", c.first_failure != null ? num(c.first_failure) : "",
+      c.masked_by_retry != null ? pct(c.masked_by_retry, 0) : ""])));
+}
+
+/* ---------- failure strips ---------- */
+function drawStrips() {
+  if (!failing.length || !N) { mount("strip-chart", el("p", { class: "sub", text: "No test case failed." })); return; }
+  const W = widthOf("strip-chart", 680);
+  const labelW = 262, right = 12, bandH = 22, rowH = 24, bootH = 20, axisH = 24;
+  const plotW = W - labelW - right;
+  const x = (i) => labelW + (i / N) * plotW;
+  const rowsTop = bandH, rowsBottom = bandH + failing.length * rowH;
+  const H = rowsBottom + bootH + axisH;
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": "Position of every failed run, per test case. The data table below gives the counts." });
+  failing.forEach((c, r) => {
+    const y = rowsTop + r * rowH;
+    root.append(svg("line", { x1: labelW, x2: W - right, y1: y + rowH, y2: y + rowH, stroke: "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: labelW - 12, y: y + rowH / 2 + 4, "text-anchor": "end", class: "name" }, c.name));
+    let d = "";
+    for (const i of c.fails) d += `M${(x(i + 0.5)).toFixed(1)},${y + 4}v${rowH - 8}`;
+    root.append(svg("path", { d, stroke: "var(--series-1)", "stroke-width": 2, fill: "none" }));
+  });
+  root.append(svg("text", { x: labelW - 12, y: rowsBottom + 14, "text-anchor": "end", class: "muted" }, "emulator start"));
+  let boots = "";
+  for (const i of DATA.boot_starts) boots += `M${x(i).toFixed(1)},${rowsBottom + 5}v10`;
+  root.append(svg("path", { d: boots, stroke: "var(--text-muted)", "stroke-width": 1.5, fill: "none" }));
+  root.append(svg("line", { x1: labelW, x2: W - right, y1: rowsBottom + bootH, y2: rowsBottom + bootH, stroke: "var(--axis)", "stroke-width": 1 }));
+  sessionBands(root, DATA.segments, x, 2, rowsBottom + bootH, 15);
+  for (const t of ticks(N, Math.max(3, Math.floor(plotW / 110)))) {
+    if (t > N) continue;
+    root.append(svg("text", { x: x(t), y: H - 6, "text-anchor": t === 0 ? "start" : "middle", class: "tick-num muted" }, t === 0 ? "run 0" : num(t)));
+  }
+  const cross = svg("line", { y1: rowsTop, y2: rowsBottom + bootH, stroke: "var(--text-secondary)", "stroke-width": 1, visibility: "hidden" });
+  root.append(cross);
+  const hit = svg("rect", { class: "hit", x: labelW, y: 0, width: plotW, height: rowsBottom + bootH });
+  hit.addEventListener("pointermove", (e) => {
+    const box = root.getBoundingClientRect();
+    const i = Math.min(N - 1, Math.max(0, Math.floor(((e.clientX - box.left) * (W / box.width) - labelW) / plotW * N)));
+    cross.setAttribute("x1", x(i + 0.5)); cross.setAttribute("x2", x(i + 0.5)); cross.setAttribute("visibility", "visible");
+    const pos = DATA.positions[i];
+    const failed = failing.filter((c) => c.fails.includes(i));
+    const rows = failed.length ? failed.map((c) => tipRow("failed", c.name, "var(--series-1)")) : [tipRow("no failures", "in this iteration")];
+    showTip(e.clientX, e.clientY, `Run ${num(i + 1)} · ${pos.label || "no label"} · ${num(pos.since_boot)} suite runs since boot`, rows);
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+  root.append(hit);
+  mount("strip-chart", root);
+}
+function drawStripTable() {
+  const labels = DATA.segments.map((s) => s.label || "session " + s.session);
+  const headers = [{ label: "Test case" }, ...labels.map((l) => ({ label: "Failed / runs, " + l, num: 1 })), { label: "Pattern found" }];
+  const rows = failing.map((c) => {
+    const cells = DATA.segments.map((s) => {
+      const f = c.fails.filter((i) => i >= s.start && i < s.end).length;
+      return `${num(f)} / ${num(Math.min(s.end, c.runs) - s.start)}`;
+    });
+    return [c.name, ...cells, c.hints.join("; ") || "none"];
+  });
+  mount("strip-table", table(headers, rows));
+}
+
+/* ---------- durations ---------- */
+function durationFigure(c, W) {
+  const left = 46, right = 70, top = 22, plotH = 130, axisH = 24;
+  const plotW = W - left - right, H = top + plotH + axisH;
+  const n = c.runs;
+  const yMaxRaw = Math.max(...c.bins.map((b) => b[4]));
+  const yt = ticks(yMaxRaw, 4);
+  const yMax = Math.max(yt[yt.length - 1], yMaxRaw);
+  const x = (i) => left + (i / n) * plotW;
+  const y = (v) => top + plotH - (v / yMax) * plotH;
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `Median duration of ${c.name} over ${n} runs` });
+  for (const t of yt) {
+    root.append(svg("line", { x1: left, x2: W - right, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick-num muted" }, t === 0 ? "0" : t + " ms"));
+  }
+  const segs = [];
+  for (const s of DATA.segments) segs.push({ ...s, end: Math.min(s.end, n) });
+  sessionBands(root, segs, x, top - 18, top + plotH, top - 6);
+  // One sub-path per session so the line does not slope across a boundary.
+  const groups = segs.map((s) => c.bins.filter((b) => b[0] >= s.start && b[0] < s.end)).filter((g) => g.length);
+  for (const g of groups) {
+    const cx = (b) => x((b[0] + b[1] + 1) / 2);
+    let band = "";
+    g.forEach((b, i) => { band += `${i ? "L" : "M"}${cx(b).toFixed(1)},${y(b[4]).toFixed(1)}`; });
+    for (let i = g.length - 1; i >= 0; i--) band += `L${cx(g[i]).toFixed(1)},${y(g[i][2]).toFixed(1)}`;
+    root.append(svg("path", { d: band + "Z", fill: "var(--series-1)", opacity: 0.10 }));
+    let line = "";
+    g.forEach((b, i) => { line += `${i ? "L" : "M"}${cx(b).toFixed(1)},${y(b[3]).toFixed(1)}`; });
+    root.append(svg("path", { d: line, fill: "none", stroke: "var(--series-1)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  }
+  for (const s of c.steps) {
+    root.append(svg("line", { x1: x(s.at), x2: x(s.at), y1: top, y2: top + plotH, stroke: "var(--text-primary)", "stroke-width": 1 }));
+  }
+  const last = c.bins[c.bins.length - 1];
+  const lx = x((last[0] + last[1] + 1) / 2);
+  root.append(svg("circle", { cx: lx, cy: y(last[3]), r: 4, fill: "var(--series-1)", stroke: "var(--surface-1)", "stroke-width": 2 }));
+  root.append(svg("text", { x: lx + 10, y: y(last[3]) + 4, class: "strong tick-num" }, msText(last[3])));
+  for (const t of ticks(n, Math.max(3, Math.floor(plotW / 120)))) {
+    if (t > n) continue;
+    root.append(svg("text", { x: x(t), y: H - 6, "text-anchor": t === 0 ? "start" : "middle", class: "tick-num muted" }, t === 0 ? "run 0" : num(t)));
+  }
+  const cross = svg("line", { y1: top, y2: top + plotH, stroke: "var(--text-secondary)", "stroke-width": 1, visibility: "hidden" });
+  root.append(cross);
+  const hit = svg("rect", { class: "hit", x: left, y: top, width: plotW, height: plotH });
+  hit.addEventListener("pointermove", (e) => {
+    const box = root.getBoundingClientRect();
+    const i = ((e.clientX - box.left) * (W / box.width) - left) / plotW * n;
+    let best = c.bins[0];
+    for (const b of c.bins) if (Math.abs((b[0] + b[1]) / 2 - i) < Math.abs((best[0] + best[1]) / 2 - i)) best = b;
+    const bx = x((best[0] + best[1] + 1) / 2);
+    cross.setAttribute("x1", bx); cross.setAttribute("x2", bx); cross.setAttribute("visibility", "visible");
+    const pos = DATA.positions[Math.min(best[0], N - 1)];
+    showTip(e.clientX, e.clientY, `Runs ${num(best[0] + 1)} to ${num(best[1] + 1)} · ${pos ? pos.label || "no label" : ""}`,
+      [tipRow(msText(best[3]), "median", "var(--series-1)"), tipRow(`${msText(best[2])} to ${msText(best[4])}`, "middle 80% of runs")]);
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+  root.append(hit);
+  return root;
+}
+function drawDurations() {
+  const host = $("duration-charts");
+  const changed = DATA.cases.filter((c) => c.steps.length && c.bins.length);
+  if (!changed.length) { host.replaceChildren(el("p", { class: "sub", text: "No step change in duration was found." })); return; }
+  const W = Math.max(680, Math.floor(host.clientWidth));
+  // Chart the cases with the most steps; the rest are listed in the table below.
+  const MAX_CHARTS = 3;
+  const biggest = (c) => Math.max(...c.steps.map((s) => Math.abs(s.relative)));
+  changed.sort((a, b) => b.steps.length - a.steps.length || biggest(b) - biggest(a));
+  const nodes = [];
+  if (changed.length > MAX_CHARTS) {
+    const counts = new Map();
+    for (const c of changed) for (const s of c.steps) {
+      if (s.at_session_start) counts.set(s.label, (counts.get(s.label) || 0) + 1);
+    }
+    const parts = [...counts].map(([label, n]) => `${n} at the start of \u201c${label || "a session"}\u201d`);
+    nodes.push(el("p", { class: "sub", text:
+      `${changed.length} test cases changed duration` + (parts.length ? `: ${parts.join(", ")}. ` : ". ") +
+      `The ${MAX_CHARTS} with the most steps are charted; the table of all test cases lists every step.` }));
+  }
+  for (const c of changed.slice(0, MAX_CHARTS)) {
+    const summary = c.steps.map((s) =>
+      `${msText(s.before)} to ${msText(s.after)} (${s.relative >= 0 ? "+" : ""}${pct(s.relative, 0)}) at run ${num(s.at + 1)}, ` +
+      (s.at_session_start ? "the start of " : "during ") + `\u201c${s.label || "a session"}\u201d`).join("; ");
+    const fig = el("figure", null,
+      el("figcaption", null, el("b", { text: c.name }), el("span", { text: "  " + summary })),
+      el("div", { class: "chart" }, durationFigure(c, W)),
+      el("details", null, el("summary", { text: "Data table" }), el("div", { class: "table-wrap" }, table(
+        [{ label: "Runs" }, { label: "Session" }, { label: "10th percentile", num: 1 }, { label: "Median", num: 1 }, { label: "90th percentile", num: 1 }],
+        c.bins.map((b) => [`${num(b[0] + 1)} to ${num(b[1] + 1)}`, (DATA.positions[Math.min(b[0], N - 1)] || {}).label || "",
+          msText(b[2]), msText(b[3]), msText(b[4])])))));
+    nodes.push(fig);
+  }
+  host.replaceChildren(...nodes);
+}
+
+/* ---------- boots ---------- */
+const BOOT_PARTS = [
+  { key: "launch", color: "var(--series-1)", label: "before the guest kernel starts" },
+  { key: "guest", color: "var(--series-2)", label: "guest boot until its network is up" },
+  { key: "wait", color: "var(--series-3)", label: "until ffx reports the emulator ready" },
+];
+function drawBootKey() {
+  $("boot-key").replaceChildren(...BOOT_PARTS.map((p) => {
+    const sw = el("i", { class: "swatch" }); sw.style.background = p.color;
+    return el("span", null, sw, document.createTextNode(p.label));
+  }));
+}
+function drawBoots() {
+  const boots = DATA.boots.filter((b) => b.ok);
+  if (!boots.length) { mount("boot-chart", el("p", { class: "sub", text: "No emulator boots were recorded." })); return; }
+  const W = widthOf("boot-chart", 680);
+  const directLabels = W >= 900;
+  const left = 46, right = directLabels ? 236 : 16, top = 44, plotH = 190, axisH = 24;
+  const plotW = W - left - right, H = top + plotH + axisH;
+  const yMaxRaw = Math.max(...boots.map((b) => b.total)) / 1000;
+  const yt = ticks(yMaxRaw, 4);
+  const yMax = Math.max(yt[yt.length - 1], yMaxRaw);
+  const y = (s) => top + plotH - (s / yMax) * plotH;
+  const band = plotW / boots.length, colW = Math.max(2, Math.min(24, band - 2));
+  const cx = (i) => left + band * (i + 0.5);
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": "Emulator start time per boot" });
+  for (const t of yt) {
+    root.append(svg("line", { x1: left, x2: W - right, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick-num muted" }, t === 0 ? "0" : t + " s"));
+  }
+  const segments = [];
+  boots.forEach((b, i) => {
+    const last = segments[segments.length - 1];
+    if (last && last.label === b.label) last.end = i + 1; else segments.push({ label: b.label, session: "", start: i, end: i + 1 });
+  });
+  sessionBands(root, segments, (i) => left + band * i, top - 42, top + plotH, top - 30);
+  const slowest = boots.reduce((a, b) => (b.total > a.total ? b : a));
+  boots.forEach((b, i) => {
+    const g = svg("g", { tabindex: 0, role: "img", "aria-label": `Boot ${b.id}, ${b.label}: ${secs(b.total)}` });
+    const split = b.launch != null && b.guest != null && b.wait != null;
+    const parts = split ? BOOT_PARTS.map((p) => ({ ...p, ms: b[p.key] })) : [{ key: "total", color: "var(--text-muted)", label: "total", ms: b.total }];
+    let base = 0;
+    const marks = [];
+    parts.forEach((p, k) => {
+      const y0 = y(base / 1000), y1 = y((base + p.ms) / 1000);
+      base += p.ms;
+      const isTop = k === parts.length - 1;
+      const gap = isTop ? 0 : 2;
+      const h = Math.max(0, y0 - y1 - gap);
+      if (h <= 0) return;
+      const xL = cx(i) - colW / 2, r = isTop ? Math.min(4, colW / 2, h) : 0;
+      const d = `M${xL},${y0} v${-(h - r)} a${r},${r} 0 0 1 ${r},${-r} h${colW - 2 * r} a${r},${r} 0 0 1 ${r},${r} v${h - r} z`;
+      const mark = svg("path", { d, fill: p.color });
+      marks.push(mark); g.append(mark);
+    });
+    if (b === slowest && boots.length > 1) {
+      g.append(svg("text", { x: cx(i), y: y(b.total / 1000) - 6, "text-anchor": "middle", class: "strong tick-num" }, secs(b.total)));
+    }
+    g.append(svg("rect", { class: "hit", x: left + band * i, y: top, width: band, height: plotH }));
+    g.addEventListener("pointerenter", () => marks.forEach((m) => m.classList.add("lift")));
+    g.addEventListener("pointerleave", () => marks.forEach((m) => m.classList.remove("lift")));
+    bindTip(g, () => ({
+      head: `Boot ${b.id} · ${b.label || "no label"}`,
+      rows: [tipRow(secs(b.total), "ffx emu start, total"), ...parts.filter((p) => p.key !== "total").map((p) => tipRow(secs(p.ms), p.label, p.color))],
+    }));
+    root.append(g);
+  });
+  if (directLabels) {
+    const b = boots[boots.length - 1];
+    if (b.launch != null && b.guest != null && b.wait != null) {
+      let base = 0;
+      const lx = left + plotW + 12;
+      BOOT_PARTS.forEach((p) => {
+        const mid = y((base + b[p.key] / 2) / 1000);
+        base += b[p.key];
+        root.append(svg("text", { x: lx, y: mid + 4 }, p.label));
+      });
+    }
+  }
+  const step = Math.max(1, Math.ceil(boots.length / Math.max(4, Math.floor(plotW / 70))));
+  boots.forEach((b, i) => {
+    if (i % step === 0) root.append(svg("text", { x: cx(i), y: H - 6, "text-anchor": "middle", class: "tick-num muted" }, i === 0 ? "boot " + b.id : b.id));
+  });
+  mount("boot-chart", root);
+}
+function drawBootTable() {
+  mount("boot-table", table(
+    [{ label: "Boot", num: 1 }, { label: "Session" }, { label: "Total", num: 1 }, ...BOOT_PARTS.map((p) => ({ label: p.label, num: 1 }))],
+    DATA.boots.map((b) => [String(b.id), b.label || "", b.ok ? secs(b.total) : "failed",
+      ...BOOT_PARTS.map((p) => (b[p.key] != null ? secs(b[p.key]) : ""))])));
+}
+
+/* ---------- all cases ---------- */
+function sparkline(c) {
+  const w = 120, h = 24;
+  const root = svg("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": "Duration trend" });
+  if (c.bins.length < 2) return root;
+  const max = Math.max(...c.bins.map((b) => b[3])) || 1;
+  let d = "";
+  c.bins.forEach((b, i) => { d += `${i ? "L" : "M"}${(1 + ((b[0] + b[1]) / 2 / c.runs) * (w - 2)).toFixed(1)},${(h - 2 - (b[3] / max) * (h - 4)).toFixed(1)}`; });
+  root.append(svg("path", { d, fill: "none", stroke: "var(--text-muted)", "stroke-width": 1.5, "stroke-linejoin": "round" }));
+  return root;
+}
+function drawCaseTable() {
+  const glyph = { stable: "✓", flaky: "▲", broken: "✕" };
+  const ordered = [...failing, ...DATA.cases.filter((c) => c.failures === 0)];
+  const rows = ordered.map((c) => {
+    const status = el("span", { class: "status " + c.verdict }, el("i", { text: glyph[c.verdict], "aria-hidden": "true" }), document.createTextNode(c.verdict));
+    const notes = [];
+    if (c.expected_flaky !== (c.verdict !== "stable")) notes.push(c.expected_flaky ? "expected flaky, never failed" : "expected stable");
+    notes.push(...c.hints);
+    for (const s of c.steps) notes.push(`duration ${msText(s.before)} to ${msText(s.after)} from run ${num(s.at + 1)} (${s.label || "session"})`);
+    if (c.outliers) notes.push(`${c.outliers} run${c.outliers > 1 ? "s" : ""} over 3x the median duration`);
+    return [c.name, status, num(c.runs), num(c.failures), pct(c.rate), `${pct(c.ci[0])} to ${pct(c.ci[1])}`,
+      c.expected_flaky ? (c.expected_rate != null ? "flaky, " + pct(c.expected_rate, 0) : "flaky") : "stable",
+      c.median_ms != null ? msText(c.median_ms) : "", sparkline(c), notes.join("; ")];
+  });
+  mount("case-table", table(
+    [{ label: "Test case" }, { label: "Verdict" }, { label: "Runs", num: 1 }, { label: "Failed", num: 1 }, { label: "Rate", num: 1 },
+     { label: "95% interval", num: 1 }, { label: "Written to be" }, { label: "Median duration", num: 1 }, { label: "Duration trend" },
+     { label: "Notes", cls: "notes" }], rows));
+}
+function drawSessionTable() {
+  mount("session-table", table(
+    [{ label: "Session", num: 1 }, { label: "Condition" }, { label: "Iterations", num: 1 }, { label: "Emulator restart every", num: 1 },
+     { label: "Build variant" }, { label: "Host busy processes", num: 1 }, { label: "Started (UTC)" }, { label: "Duration", num: 1 }],
+    DATA.sessions.map((s) => {
+      const a = s.args || {};
+      const mins = s.ended ? ((new Date(s.ended) - new Date(s.started)) / 60000).toFixed(1) + " min" : "";
+      return [String(s.id), s.label || "", a.iterations != null ? num(a.iterations) : "", a.restart_every ? num(a.restart_every) + " iterations" : "never",
+        (a.define || []).join(", ") || "default", String(a.host_stress || 0), s.started.replace("T", " ").slice(0, 19), mins];
+    })));
+}
+function drawSubtitle() {
+  const s = DATA.sessions[0];
+  if (!s) return;
+  const parts = [`${num(DATA.suite_runs)} suite runs in ${DATA.sessions.length} session${DATA.sessions.length > 1 ? "s" : ""}`,
+    `Fuchsia SDK ${s.sdk}`, `product ${s.product || "unknown"}`, `${s.cpus} host CPUs, ${s.kvm ? "KVM" : "no KVM"}`,
+    `generated ${DATA.generated.replace("T", " ").slice(0, 16)} UTC`];
+  $("subtitle").textContent = parts.join(" · ");
+}
+
+function drawCharts() { drawRates(); drawStrips(); drawDurations(); drawBoots(); }
+drawSubtitle(); drawKpis(); drawBootKey(); drawCharts();
+drawRateTable(); drawStripTable(); drawBootTable(); drawCaseTable(); drawSessionTable();
+// Charts are sized to their container, so redraw whenever its width changes.
+let resizeTimer = 0, drawnWidth = document.querySelector("main").clientWidth;
+new ResizeObserver((entries) => {
+  const width = Math.round(entries[0].contentRect.width);
+  if (width === drawnWidth) return;
+  drawnWidth = width;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(drawCharts, 150);
+}).observe(document.querySelector("main"));
+</script>
+</body>
+</html>

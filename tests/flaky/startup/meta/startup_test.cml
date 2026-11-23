@@ -1,0 +1,23 @@
+{
+    include: [
+        "sys/testing/gtest_runner.shard.cml",
+        "syslog/client.shard.cml",
+    ],
+    program: {
+        binary: "bin/flaky_startup_test",
+    },
+    children: [
+        {
+            // Started by the component framework on the first connection to
+            // its protocol, so every test run gets a cold server.
+            name: "slow_server",
+            url: "#meta/slow_server.cm",
+        },
+    ],
+    use: [
+        {
+            protocol: "flakelab.echo.Echo",
+            from: "#slow_server",
+        },
+    ],
+}

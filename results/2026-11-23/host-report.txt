@@ -1,0 +1,38 @@
+Sessions: 1 (baseline), 2 (busy host)
+Suite runs: 400   runs without a result: none
+
+Emulator boots under 'baseline': 10 (0 failed)
+  ffx emu start: median 7.98 s, min 7.92 s, max 14.91 s
+  median split: 808 ms before the guest kernel starts, 1552 ms guest boot to network up, 5670 ms until ffx reports ready
+  slow boots (over 1.25x the median of the first condition): 2 of 10, slowest 14.91 s
+
+Emulator boots under 'busy host': 4 (0 failed)
+  ffx emu start: median 16.13 s, min 16.00 s, max 16.29 s
+  median split: 2278 ms before the guest kernel starts, 3443 ms guest boot to network up, 10334 ms until ffx reports ready
+  slow boots (over 1.25x the median of the first condition): 4 of 4, slowest 16.29 s
+
+Flaky or failing test cases: 1
+  case                                    runs  fail   rate  95% interval    1st fail retry hides  expected
+  FlakyHostTest.test_echo_within_budget    400   113  28.2%  24.1% - 32.9%         70       10.7%  flaky
+      -> rate differs by condition: 13/300 under 'baseline' vs 100/100 under 'busy host' (p=1.7e-80)
+
+Test cases with no failures: 4
+  case                                            runs  failure rate is below (95%)
+  DeviceTest.test_core_components_exist            400  1.0%
+  DeviceTest.test_log_message_reaches_the_device_log   400  1.0%
+  DeviceTest.test_remote_control_echoes            400  1.0%
+  DeviceTest.test_uptime_advances                  400  1.0%
+
+Duration step changes: 4
+  DeviceTest.test_core_components_exist: 32 ms -> 121 ms (+278%) from run 301, session 2 (busy host), p=5.6e-37
+  DeviceTest.test_log_message_reaches_the_device_log: 83 ms -> 318 ms (+283%) from run 301, session 2 (busy host), p=5.6e-37
+  DeviceTest.test_remote_control_echoes: 27 ms -> 84 ms (+211%) from run 301, session 2 (busy host), p=5.7e-37
+  DeviceTest.test_uptime_advances: 56 ms -> 166 ms (+196%) from run 301, session 2 (busy host), p=3.1e-37
+Cases with very slow runs: 0
+
+Detector against the expectations in lab.toml
+  flaky and flagged: 1   stable and not flagged: 4
+  flagged but expected stable: 0
+  expected flaky but not flagged: 0
+  injected rate inside the 95% interval: 0 of 0
+  expected cause found: 0 of 0

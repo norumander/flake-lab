@@ -1,0 +1,56 @@
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_cc_test",
+    "fuchsia_unittest_package",
+)
+
+# Stable controls. None of these should ever fail; a failure here means the lab
+# itself (emulator, runner, host) is misbehaving.
+
+_GTEST = "@com_google_googletest//:gtest_main"
+
+fuchsia_cc_test(
+    name = "stable_math_test",
+    size = "small",
+    srcs = ["math_test.cc"],
+    deps = [_GTEST],
+)
+
+fuchsia_cc_test(
+    name = "stable_zircon_test",
+    size = "small",
+    srcs = ["zircon_test.cc"],
+    deps = [
+        _GTEST,
+        "@fuchsia_sdk//pkg/zx",
+    ],
+)
+
+fuchsia_cc_test(
+    name = "stable_threads_test",
+    size = "small",
+    srcs = ["threads_test.cc"],
+    deps = [_GTEST],
+)
+
+fuchsia_cc_test(
+    name = "stable_timer_test",
+    size = "small",
+    srcs = ["timer_test.cc"],
+    deps = [
+        _GTEST,
+        "@fuchsia_sdk//pkg/zx",
+    ],
+)
+
+fuchsia_unittest_package(
+    name = "pkg",
+    package_name = "flakelab_stable",
+    unit_tests = [
+        ":stable_math_test",
+        ":stable_threads_test",
+        ":stable_timer_test",
+        ":stable_zircon_test",
+    ],
+    visibility = ["//visibility:public"],
+)

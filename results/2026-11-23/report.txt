@@ -1,0 +1,89 @@
+Sessions: 1 (baseline), 2 (slower build), 3 (busy host)
+Suite runs: 8000   runs without a result: none
+
+Emulator boots under 'baseline': 20 (0 failed)
+  ffx emu start: median 7.96 s, min 6.74 s, max 8.15 s
+  median split: 750 ms before the guest kernel starts, 1517 ms guest boot to network up, 5616 ms until ffx reports ready
+
+Emulator boots under 'slower build': 10 (0 failed)
+  ffx emu start: median 7.95 s, min 7.83 s, max 13.98 s
+  median split: 741 ms before the guest kernel starts, 1512 ms guest boot to network up, 5686 ms until ffx reports ready
+  slow boots (over 1.25x the median of the first condition): 1 of 10, slowest 13.98 s
+
+Emulator boots under 'busy host': 10 (0 failed)
+  ffx emu start: median 16.40 s, min 9.28 s, max 17.15 s
+  median split: 2689 ms before the guest kernel starts, 3755 ms guest boot to network up, 9831 ms until ffx reports ready
+  slow boots (over 1.25x the median of the first condition): 9 of 10, slowest 17.15 s
+
+Flaky or failing test cases: 7
+  case                                    runs  fail   rate  95% interval    1st fail retry hides  expected
+  FlakyInjected.Rate20Percent              800   133  16.6%  14.2% - 19.4%          9       85.7%  flaky, p=0.2
+  FlakyBoot.NeedsWarmDevice                800   105  13.1%  11.0% - 15.6%          1       28.6%  flaky
+      -> fails early after boot: median position 14 for failures vs 114 for passes (p=1.4e-54)
+      -> rate differs by condition: 74/400 under 'baseline' vs 1/200 under 'busy host' (p=4.5e-13)
+  FlakyStartup.ReplyBeforeDeadline         800    79   9.9%  8.0% - 12.1%          49       89.7%  flaky
+      -> rate differs by condition: 27/400 under 'baseline' vs 37/200 under 'busy host' (p=3.3e-05)
+  FlakyInjected.Rate5Percent               800    43   5.4%  4.0% - 7.2%           12       90.7%  flaky, p=0.05
+  FlakyRace.LostUpdate                     800    23   2.9%  1.9% - 4.3%           36      100.0%  flaky
+  FlakyTiming.SleepInsteadOfSync           800    23   2.9%  1.9% - 4.3%          271      100.0%  flaky
+      -> rate differs by condition: 1/400 under 'baseline' vs 20/200 under 'busy host' (p=2.2e-09)
+  FlakyInjected.Rate1Percent               800     7   0.9%  0.4% - 1.8%          105      100.0%  flaky, p=0.01
+
+Test cases with no failures: 11
+  case                                            runs  failure rate is below (95%)
+  PerfChecksum.HashBuffer                          800  0.5%
+  StableMath.PrimeCountBelow100k                   800  0.5%
+  StableMath.SortIsOrdered                         800  0.5%
+  StableMath.SumOfFirstMillion                     800  0.5%
+  StableThreads.AtomicCounterIsExact               800  0.5%
+  StableThreads.ProducerConsumerDeliversEverything   800  0.5%
+  StableTimer.MonotonicClockDoesNotGoBackwards     800  0.5%
+  StableTimer.SleepLastsAtLeastAsLongAsAsked       800  0.5%
+  StableZircon.ChannelRoundTrip                    800  0.5%
+  StableZircon.EventSignalIsObserved               800  0.5%
+  StableZircon.VmoReadBackWhatWasWritten           800  0.5%
+
+Duration step changes: 20
+  FlakyBoot.NeedsWarmDevice: 4 ms -> 23 ms (+475%) from run 6005, session 3 (busy host), p=6.3e-76
+  FlakyInjected.Rate1Percent: 4 ms -> 23 ms (+475%) from run 6006, session 3 (busy host), p=4.9e-64
+  FlakyInjected.Rate20Percent: 4 ms -> 24 ms (+500%) from run 6006, session 3 (busy host), p=2.1e-60
+  FlakyInjected.Rate5Percent: 4 ms -> 22 ms (+450%) from run 6006, session 3 (busy host), p=8.4e-65
+  FlakyRace.LostUpdate: 4 ms -> 24 ms (+500%) from run 6007, session 3 (busy host), p=4.4e-72
+  FlakyTiming.SleepInsteadOfSync: 5 ms -> 24 ms (+380%) from run 6008, session 3 (busy host), p=3.3e-63
+  PerfChecksum.HashBuffer: 43 ms -> 58 ms (+35%) from run 4010, session 2 (slower build), p=9.9e-101
+  PerfChecksum.HashBuffer: 58 ms -> 308 ms (+432%) from run 6010, session 3 (busy host), p=2.1e-65
+  StableMath.PrimeCountBelow100k: 6 ms -> 31 ms (+417%) from run 6001, session 3 (busy host), p=1.9e-70
+  StableMath.SortIsOrdered: 5 ms -> 30 ms (+490%) from run 6001, session 3 (busy host), p=5.1e-71
+  StableMath.SumOfFirstMillion: 14 ms -> 68 ms (+382%) from run 6001, session 3 (busy host), p=1.6e-73
+  StableMath.SumOfFirstMillion: 68 ms -> 78 ms (+15%) from run 7161, session 3 (busy host), p=5.5e-04
+  StableThreads.AtomicCounterIsExact: 6 ms -> 31 ms (+417%) from run 6002, session 3 (busy host), p=6.8e-66
+  StableThreads.ProducerConsumerDeliversEverything: 28 ms -> 128 ms (+355%) from run 6002, session 3 (busy host), p=2.9e-67
+  StableTimer.MonotonicClockDoesNotGoBackwards: 6 ms -> 32 ms (+433%) from run 6003, session 3 (busy host), p=1.2e-73
+  StableTimer.SleepLastsAtLeastAsLongAsAsked: 55 ms -> 76 ms (+37%) from run 6003, session 3 (busy host), p=4.8e-71
+  StableZircon.ChannelRoundTrip: 4 ms -> 25 ms (+525%) from run 6004, session 3 (busy host), p=7.7e-71
+  StableZircon.EventSignalIsObserved: 3 ms -> 21 ms (+600%) from run 6004, session 3 (busy host), p=2.1e-70
+  StableZircon.VmoReadBackWhatWasWritten: 4 ms -> 23 ms (+475%) from run 6004, session 3 (busy host), p=4.5e-70
+  FlakyStartup.ReplyBeforeDeadline: 52 ms -> 74 ms (+44%) from run 6009, session 3 (busy host), p=2.4e-09
+Cases with very slow runs: 12
+  StableThreads.AtomicCounterIsExact: 43 of 800 passing runs took over 3x the median of 7 ms; slowest 348 ms
+  StableMath.SumOfFirstMillion: 6 of 800 passing runs took over 3x the median of 15 ms; slowest 221 ms
+  FlakyBoot.NeedsWarmDevice: 2 of 695 passing runs took over 3x the median of 4 ms; slowest 92 ms
+  FlakyRace.LostUpdate: 2 of 777 passing runs took over 3x the median of 5 ms; slowest 109 ms
+  FlakyInjected.Rate1Percent: 1 of 793 passing runs took over 3x the median of 4 ms; slowest 220 ms
+  FlakyInjected.Rate20Percent: 1 of 667 passing runs took over 3x the median of 5 ms; slowest 398 ms
+  FlakyInjected.Rate5Percent: 1 of 757 passing runs took over 3x the median of 5 ms; slowest 401 ms
+  FlakyTiming.SleepInsteadOfSync: 1 of 777 passing runs took over 3x the median of 6 ms; slowest 79 ms
+  StableMath.PrimeCountBelow100k: 1 of 800 passing runs took over 3x the median of 6 ms; slowest 97 ms
+  StableThreads.ProducerConsumerDeliversEverything: 1 of 800 passing runs took over 3x the median of 31 ms; slowest 423 ms
+  StableZircon.ChannelRoundTrip: 1 of 800 passing runs took over 3x the median of 5 ms; slowest 181 ms
+  StableZircon.EventSignalIsObserved: 1 of 800 passing runs took over 3x the median of 4 ms; slowest 114 ms
+
+Detector against the expectations in lab.toml
+  flaky and flagged: 7   stable and not flagged: 11
+  flagged but expected stable: 0
+  expected flaky but not flagged: 0
+  injected rate inside the 95% interval: 2 of 3
+  expected cause found: 1 of 1
+    FlakyInjected.Rate1Percent: 95% chance of a first failure within 299 runs; first seen at run 105
+    FlakyInjected.Rate20Percent: 95% chance of a first failure within 14 runs; first seen at run 9
+    FlakyInjected.Rate5Percent: 95% chance of a first failure within 59 runs; first seen at run 12

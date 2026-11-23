@@ -1,0 +1,78 @@
+# Bazel module for the flake lab.
+#
+# The Fuchsia SDK wiring below is adapted from the MODULE.bazel of
+# https://fuchsia.googlesource.com/sdk-samples/getting-started
+# (Copyright 2026 The Fuchsia Authors, BSD-style license; see
+# third_party/fuchsia-infra-bazel-rules/LICENSE).
+#
+# The SDK, the Bazel rules and clang are pinned by the CIPD manifests in
+# //manifests. Change those files to move to another SDK version.
+
+module(
+    name = "flake_lab",
+    version = "0.0.1",
+)
+
+bazel_dep(name = "fuchsia_infra")
+local_path_override(
+    module_name = "fuchsia_infra",
+    path = "third_party/fuchsia-infra-bazel-rules",
+)
+
+bazel_dep(name = "googletest", version = "1.18.0.bcr.1", repo_name = "com_google_googletest")
+bazel_dep(name = "platforms", version = "1.1.0")  # Used by @fuchsia_clang transitively.
+bazel_dep(name = "rules_cc", version = "0.2.22")
+
+# Replace the stub `@fuchsia_sdk` in googletest with the real one.
+fake_fuchsia_sdk_extension = use_extension("@com_google_googletest//:fake_fuchsia_sdk.bzl", "fuchsia_sdk")
+
+override_repo(fake_fuchsia_sdk_extension, "fuchsia_sdk")
+
+cipd_tool_repository = use_repo_rule("@fuchsia_infra//cipd:defs.bzl", "cipd_tool_repository")
+
+cipd_tool_repository(name = "cipd_tool")
+
+cipd_ext = use_extension("@fuchsia_infra//cipd:defs.bzl", "cipd_ext")
+cipd_ext.repository(
+    name = "rules_fuchsia",
+    ensure_file = "//manifests:rules_fuchsia.ensure",
+)
+use_repo(cipd_ext, "rules_fuchsia")
+cipd_ext.repository(
+    name = "fuchsia_sdk",
+    ensure_file = "//manifests:bazel_sdk.ensure",
+)
+use_repo(cipd_ext, "fuchsia_sdk")
+
+fuchsia_clang_ext = use_extension("@fuchsia_infra//:extensions.bzl", "fuchsia_clang_ext")
+fuchsia_clang_ext.cipd_ensure(
+    ensure_file = "//manifests:clang.ensure",
+)
+use_repo(fuchsia_clang_ext, "fuchsia_clang")
+
+# Fuchsia SDK toolchain.
+fuchsia_toolchain_repo = use_repo_rule("@rules_fuchsia//fuchsia/workspace:register_fuchsia_sdk_toolchain.bzl", "fuchsia_toolchain_decl")
+
+fuchsia_toolchain_repo(
+    name = "fuchsia_sdk_toolchain",
+    toolchain_path = "@fuchsia_sdk//:fuchsia_toolchain_info",
+)
+
+register_toolchains("@fuchsia_sdk_toolchain//:all")
+
+# Target C++ toolchain.
+register_toolchains("@fuchsia_clang//:all")
+
+# Host C++ toolchain.
+fuchsia_clang_host_toolchain_repo = use_repo_rule("@fuchsia_infra//infra:host_toolchains.bzl", "fuchsia_clang_host_toolchain_repo")
+
+fuchsia_clang_host_toolchain_repo(name = "host_clang_toolchain")
+
+register_toolchains("@host_clang_toolchain//:all")
+
+# Workaround for a BCR abseil-cpp compatibility_level mismatch between re2 and
+# googletest 1.18.0.bcr.1 (same override as the upstream samples).
+single_version_override(
+    module_name = "abseil-cpp",
+    version = "20260526.0",
+)

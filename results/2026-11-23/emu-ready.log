@@ -1,0 +1,40 @@
+boot 1 default  usable after   7992 ms, guest uptime 7153 ms, echo ok
+boot 1 wait     usable after   7499 ms, guest uptime 6709 ms, echo ok
+boot 1 poll     usable after  11106 ms, guest uptime 10312 ms, echo ok
+boot 2 default  usable after   7859 ms, guest uptime 7063 ms, echo ok
+boot 2 wait     usable after   7374 ms, guest uptime 6560 ms, echo ok
+boot 2 poll     usable after   6946 ms, guest uptime 6150 ms, echo ok
+boot 3 default  usable after   8008 ms, guest uptime 7202 ms, echo ok
+boot 3 wait     usable after  13882 ms, guest uptime 13057 ms, echo ok
+boot 3 poll     usable after   6949 ms, guest uptime 6143 ms, echo ok
+boot 4 default  usable after   7887 ms, guest uptime 7072 ms, echo ok
+boot 4 wait     usable after   7502 ms, guest uptime 6687 ms, echo ok
+boot 4 poll     usable after  11075 ms, guest uptime 10285 ms, echo ok
+boot 5 default  usable after   7882 ms, guest uptime 7042 ms, echo ok
+boot 5 wait     usable after   7479 ms, guest uptime 6679 ms, echo ok
+boot 5 poll     usable after   6884 ms, guest uptime 6105 ms, echo ok
+boot 6 default  usable after   8016 ms, guest uptime 7185 ms, echo ok
+boot 6 wait     usable after   7375 ms, guest uptime 6555 ms, echo ok
+boot 6 poll     usable after  11098 ms, guest uptime 10308 ms, echo ok
+boot 7 default  usable after   8009 ms, guest uptime 7198 ms, echo ok
+boot 7 wait     usable after   7509 ms, guest uptime 6704 ms, echo ok
+boot 7 poll     usable after   6948 ms, guest uptime 6118 ms, echo ok
+boot 8 default  usable after   7884 ms, guest uptime 7079 ms, echo ok
+boot 8 wait     usable after   6820 ms, guest uptime 5965 ms, echo ok
+boot 8 poll     usable after  11088 ms, guest uptime 10285 ms, echo ok
+boot 9 default  usable after   7868 ms, guest uptime 7050 ms, echo ok
+boot 9 wait     usable after   7486 ms, guest uptime 6683 ms, echo ok
+boot 9 poll     usable after  11120 ms, guest uptime 10314 ms, echo ok
+boot 10 default  usable after   8008 ms, guest uptime 7188 ms, echo ok
+boot 10 wait     usable after  13012 ms, guest uptime 12218 ms, echo ok
+boot 10 poll     usable after  11106 ms, guest uptime 10270 ms, echo ok
+boot 11 default  usable after   7849 ms, guest uptime 7057 ms, echo ok
+boot 11 wait     usable after  13340 ms, guest uptime 12447 ms, echo ok
+boot 11 poll     usable after  11107 ms, guest uptime 10291 ms, echo ok
+boot 12 default  usable after   7860 ms, guest uptime 7060 ms, echo ok
+boot 12 wait     usable after   7514 ms, guest uptime 6701 ms, echo ok
+boot 12 poll     usable after   6888 ms, guest uptime 6090 ms, echo ok
+
+default  n=12  median    7886 ms  min 7849  max 8016
+wait     n=12  median    7500 ms  min 6820  max 13882
+poll     n=12  median   11082 ms  min 6884  max 11120

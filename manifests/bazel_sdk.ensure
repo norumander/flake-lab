@@ -1,0 +1,3 @@
+$ResolvedVersions bazel_sdk.resolved
+$VerifiedPlatform linux-amd64
+fuchsia/sdk/core/fuchsia-bazel-rules/linux-amd64 git_revision:3c0e8af2743cd86b15489a822008d28cddf631c3

@@ -1,0 +1,58 @@
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_cc_test",
+    "fuchsia_unittest_package",
+)
+
+# Deliberately flaky tests. Each file documents its mechanism and, where it can
+# be known, its expected failure rate.
+
+_GTEST = "@com_google_googletest//:gtest_main"
+
+_ZX = "@fuchsia_sdk//pkg/zx"
+
+fuchsia_cc_test(
+    name = "flaky_injected_test",
+    size = "small",
+    srcs = ["injected_test.cc"],
+    deps = [_GTEST],
+)
+
+fuchsia_cc_test(
+    name = "flaky_race_test",
+    size = "small",
+    srcs = ["race_test.cc"],
+    deps = [_GTEST],
+)
+
+fuchsia_cc_test(
+    name = "flaky_timing_test",
+    size = "small",
+    srcs = ["timing_test.cc"],
+    deps = [
+        _GTEST,
+        _ZX,
+    ],
+)
+
+fuchsia_cc_test(
+    name = "flaky_boot_test",
+    size = "small",
+    srcs = ["boot_test.cc"],
+    deps = [
+        _GTEST,
+        _ZX,
+    ],
+)
+
+fuchsia_unittest_package(
+    name = "pkg",
+    package_name = "flakelab_flaky",
+    unit_tests = [
+        ":flaky_boot_test",
+        ":flaky_injected_test",
+        ":flaky_race_test",
+        ":flaky_timing_test",
+    ],
+    visibility = ["//visibility:public"],
+)

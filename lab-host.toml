@@ -1,0 +1,16 @@
+# The host-driven suite on its own. Run it with:
+#
+#   python3 -m flakelab --db out/host.sqlite run --config lab-host.toml ...
+#
+# It needs the virtualenv described under "Host-driven tests" in the README.
+# To run it together with the device tests, copy the [[host_suite]] block and
+# the expectation into lab.toml.
+
+product_bundle = "~/pb/minimal.x64"
+
+[[host_suite]]
+name = "device_test"
+module = "host_tests.device_test"
+
+[expect]
+"FlakyHostTest.test_echo_within_budget" = { flaky = true }

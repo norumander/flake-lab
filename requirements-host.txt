@@ -1,0 +1,3 @@
+# Only the host-driven tests in host_tests/ need this. The runner and the
+# analysis in flakelab/ use the standard library alone.
+mobly==1.13.1

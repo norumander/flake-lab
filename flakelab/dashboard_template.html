@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flake lab report</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--page); }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
+h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+h2 { font-size: 16px; font-weight: 600; margin: 0 0 2px; }
+p { margin: 0; }
+.sub { color: var(--text-secondary); margin-bottom: 14px; max-width: 78ch; }
+header { margin-bottom: 20px; }
+header p { color: var(--text-secondary); }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px 16px;
+  margin-top: 16px;
+}
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.tile .label { color: var(--text-secondary); font-size: 13px; }
+.tile .value { font-size: 28px; font-weight: 600; line-height: 1.25; }
+.tile .note { color: var(--text-muted); font-size: 12px; }
+
+.chart { overflow-x: auto; }
+/* Charts are drawn at the container's width and redrawn when it changes. Until
+   the redraw lands they scale down rather than overflow, but never below the
+   680px they need to stay readable; narrower than that, the chart scrolls. */
+.chart svg { display: block; max-width: max(100%, 680px); height: auto; }
+svg text { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-secondary); }
+svg text.name { font-size: 13px; fill: var(--text-primary); }
+svg text.muted { fill: var(--text-muted); }
+svg text.strong { fill: var(--text-primary); font-weight: 600; }
+svg .tick-num { font-variant-numeric: tabular-nums; }
+svg [tabindex]:focus { outline: none; }
+svg [tabindex]:focus-visible .hit { stroke: var(--text-primary); stroke-width: 1.5; }
+.hit { fill: transparent; }
+.lift { opacity: 0.82; }
+
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key i { display: inline-block; }
+.swatch { width: 12px; height: 12px; border-radius: 2px; }
+
+figure { margin: 0 0 18px; }
+figcaption { margin-bottom: 4px; }
+figcaption b { font-weight: 600; }
+figcaption span { color: var(--text-secondary); }
+
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.notes { color: var(--text-secondary); min-width: 220px; }
+.table-wrap { overflow-x: auto; }
+.status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.status i { font-style: normal; font-size: 11px; }
+.status.stable i { color: var(--good); }
+.status.flaky i { color: var(--warning); }
+.status.broken i { color: var(--critical); }
+
+#tooltip {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  padding: 8px 10px;
+  font-size: 12px;
+  max-width: 340px;
+  display: none;
+}
+#tooltip .t-head { color: var(--text-secondary); margin-bottom: 4px; }
+#tooltip .t-row { display: flex; align-items: center; gap: 8px; }
+#tooltip .t-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tooltip .t-row span { color: var(--text-secondary); }
+#tooltip .t-key { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+#tooltip .t-note { color: var(--text-secondary); margin-top: 4px; }
+footer { color: var(--text-secondary); font-size: 13px; margin-top: 22px; max-width: 86ch; }
+footer p + p { margin-top: 6px; }
+</style>
+</head>
+<body class="viz-root">
+<main>
+  <header>
+    <h1>Flake lab report</h1>
+    <p id="subtitle"></p>
+  </header>
+
+  <section class="kpi-row" id="kpis" aria-label="Headline numbers"></section>
+
+  <section class="card">
+    <h2>Failure rate of each test case that failed at least once</h2>
+    <p class="sub">Share of runs that failed, with the range the true rate lies in with 95% confidence. Three cases fail at a rate built into the test, so the estimate can be checked.</p>
+    <div class="key" aria-hidden="true">
+      <span><i class="swatch" style="background:var(--series-1)"></i>measured failure rate</span>
+      <span><i style="width:18px;height:2px;background:var(--text-secondary)"></i>95% interval</span>
+      <span><i style="width:2px;height:14px;background:var(--text-primary)"></i>rate built into the test</span>
+    </div>
+    <div class="chart" id="rate-chart"></div>
+    <details><summary>Data table</summary><div class="table-wrap" id="rate-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>When each of those cases failed</h2>
+    <p class="sub">One row per test case, one mark per failed run, in the order the runs happened. The bottom row marks every emulator start.</p>
+    <div class="chart" id="strip-chart"></div>
+    <details><summary>Data table</summary><div class="table-wrap" id="strip-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>Test cases whose duration changed</h2>
+    <p class="sub">Median duration of passing runs, with the band that holds the middle 80% of them. A vertical line marks each step change the detector found.</p>
+    <div id="duration-charts"></div>
+  </section>
+
+  <section class="card">
+    <h2>Emulator start time, boot by boot</h2>
+    <p class="sub">Wall-clock time of <code>ffx emu start</code>, split with the guest's own clock into three parts.</p>
+    <div class="key" id="boot-key"></div>
+    <div class="chart" id="boot-chart"></div>
+    <details><summary>Data table</summary><div class="table-wrap" id="boot-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>All test cases</h2>
+    <p class="sub">The duration trend is drawn from zero, so a flat line means a steady test.</p>
+    <div class="table-wrap" id="case-table"></div>
+  </section>
+
+  <section class="card">
+    <h2>Sessions</h2>
+    <p class="sub">Each session ran the whole suite under one condition.</p>
+    <div class="table-wrap" id="session-table"></div>
+  </section>
+
+  <footer>
+    <p>A case counts as flaky when it both passed and failed on the same build. Intervals are Wilson score intervals. Patterns in when a case fails are tested with Mann-Whitney and Fisher exact tests at p &lt; 0.01; duration steps with Pettitt's test at p &lt; 0.001 and a shift of at least 10%.</p>
+    <p>Runs that produced no result file are counted as lab errors, never as test failures.</p>
+  </footer>
+</main>
+<div id="tooltip" role="status" aria-live="polite"></div>
+
+<script>const DATA = /*__FLAKELAB_DATA__*/null;</script>
+<script>
+"use strict";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+
+function el(tag, props, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v);
+  }
+  for (const child of children) node.append(child);
+  return node;
+}
+function svg(tag, attrs, text) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+const num = (n) => n.toLocaleString("en-US");
+const pct = (x, digits = 1) => (100 * x).toFixed(digits) + "%";
+const secs = (ms) => (ms / 1000).toFixed(2) + " s";
+const msText = (ms) => (ms >= 100 ? Math.round(ms) : Math.round(ms * 10) / 10) + " ms";
+
+function niceStep(max, target) {
+  const raw = max / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
+function ticks(max, target) {
+  const step = niceStep(max, target);
+  const out = [];
+  for (let v = 0; v <= max + step * 1e-9; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  return out;
+}
+
+/* ---------- tooltip ---------- */
+const tip = $("tooltip");
+function tipRow(value, label, color) {
+  const row = el("div", { class: "t-row" });
+  if (color) { const key = el("i", { class: "t-key" }); key.style.background = color; row.append(key); }
+  row.append(el("b", { text: value }), el("span", { text: label }));
+  return row;
+}
+function showTip(x, y, head, rows, note) {
+  tip.replaceChildren();
+  if (head) tip.append(el("div", { class: "t-head", text: head }));
+  for (const r of rows) tip.append(r);
+  if (note) tip.append(el("div", { class: "t-note", text: note }));
+  tip.style.display = "block";
+  const box = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + box.width > window.innerWidth - 8) left = x - box.width - 14;
+  if (top + box.height > window.innerHeight - 8) top = y - box.height - 14;
+  tip.style.left = Math.max(8, left) + "px";
+  tip.style.top = Math.max(8, top) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function bindTip(node, build) {
+  node.addEventListener("pointermove", (e) => { const t = build(); showTip(e.clientX, e.clientY, t.head, t.rows, t.note); });
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("focus", () => {
+    const b = node.getBoundingClientRect(); const t = build();
+    showTip(b.left + b.width / 2, b.top + b.height / 2, t.head, t.rows, t.note);
+  });
+  node.addEventListener("blur", hideTip);
+}
+
+/* ---------- shared pieces ---------- */
+function table(headers, rows) {
+  const t = el("table");
+  const head = el("tr");
+  for (const h of headers) head.append(el("th", { class: h.num ? "num" : "", text: h.label, scope: "col" }));
+  t.append(el("thead", null, head));
+  const body = el("tbody");
+  for (const r of rows) {
+    const tr = el("tr");
+    r.forEach((cell, i) => {
+      const td = el("td", { class: headers[i].num ? "num" : headers[i].cls || "" });
+      if (cell instanceof Node) td.append(cell); else td.textContent = cell;
+      tr.append(td);
+    });
+    body.append(tr);
+  }
+  t.append(body);
+  return t;
+}
+function mount(id, node) { $(id).replaceChildren(node); }
+function widthOf(id, min) { return Math.max(min, Math.floor($(id).clientWidth)); }
+
+/* Session bands along the top of a plot: a label per segment, a hairline between. */
+function sessionBands(g, segments, x, top, bottom, labelY) {
+  segments.forEach((seg, i) => {
+    const x0 = x(seg.start), x1 = x(seg.end);
+    if (i > 0) g.append(svg("line", { x1: x0, x2: x0, y1: top, y2: bottom, stroke: "var(--axis)", "stroke-width": 1 }));
+    // A name that does not fit its band is cut short; the tables give it in full.
+    const full = seg.label || "session " + seg.session;
+    const room = Math.floor((x1 - x0 - 8) / 6.6);
+    const name = full.length <= room ? full : room >= 4 ? full.slice(0, room - 1) + "\u2026" : "";
+    if (name) g.append(svg("text", { x: x0 + 4, y: labelY, class: "muted" }, name));
+  });
+}
+
+const failing = DATA.cases.filter((c) => c.failures > 0).sort((a, b) => b.rate - a.rate);
+const N = DATA.positions.length;
+
+/* ---------- headline numbers ---------- */
+function drawKpis() {
+  const e = DATA.evaluation, b = DATA.boot_groups[0];
+  const tiles = [];
+  const add = (label, value, note) => tiles.push(el("div", { class: "tile" },
+    el("div", { class: "label", text: label }), el("div", { class: "value", text: value }),
+    el("div", { class: "note", text: note || "" })));
+  add("Suite runs", num(DATA.suite_runs), num(DATA.case_runs) + " test case runs");
+  if (e) {
+    const expected = e.true_positives + e.false_negatives.length;
+    add("Flaky cases found", e.true_positives + " of " + expected, "cases written to be flaky");
+    add("False alarms", String(e.false_positives.length),
+        "among " + (e.true_negatives + e.false_positives.length) + " cases expected to be stable");
+  } else {
+    add("Cases that failed", String(failing.length), "of " + DATA.cases.length + " test cases");
+  }
+  const lost = Object.values(DATA.infra_errors).reduce((a, v) => a + v, 0);
+  add("Runs without a result", num(lost), "lab errors, not test failures");
+  if (b && b.median != null) add("Emulator start, median", secs(b.median), `${b.boots} boots under ${b.label || "the first condition"}, slowest ${secs(b.max)}`);
+  if (b && b.wait != null && b.median) add("Start time spent waiting", pct(b.wait / b.median, 0), "guest network already up, ffx not yet ready");
+  $("kpis").replaceChildren(...tiles);
+}
+
+/* ---------- failure rates ---------- */
+function drawRates() {
+  if (!failing.length) { mount("rate-chart", el("p", { class: "sub", text: "No test case failed." })); return; }
+  const W = widthOf("rate-chart", 680);
+  const labelW = 262, valueW = 60, rowH = 34, top = 6, axisH = 26;
+  const plotW = W - labelW - valueW;
+  const maxV = Math.max(...failing.map((c) => Math.max(c.ci[1], c.expected_rate || 0)));
+  const tk = ticks(maxV, 5);
+  const xMax = Math.max(tk[tk.length - 1], maxV);
+  const x = (v) => labelW + (v / xMax) * plotW;
+  const H = top + failing.length * rowH + axisH;
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": "Failure rate per test case" });
+  for (const t of tk) {
+    root.append(svg("line", { x1: x(t), x2: x(t), y1: top, y2: H - axisH, stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: x(t), y: H - 8, "text-anchor": "middle", class: "tick-num muted" }, pct(t, 0)));
+  }
+  failing.forEach((c, i) => {
+    const y = top + i * rowH, mid = y + rowH / 2;
+    const g = svg("g", { tabindex: 0, role: "img",
+      "aria-label": `${c.name}: failed ${c.failures} of ${c.runs} runs, ${pct(c.rate)}, 95% interval ${pct(c.ci[0])} to ${pct(c.ci[1])}` });
+    g.append(svg("text", { x: labelW - 12, y: mid + 4, "text-anchor": "end", class: "name" }, c.name));
+    const w = Math.max(1, x(c.rate) - x(0)), h = 14, r = Math.min(4, w);
+    const bar = svg("path", { fill: "var(--series-1)",
+      d: `M${x(0)},${mid - h / 2} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${h - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(w - r)} z` });
+    g.append(bar);
+    g.append(svg("line", { x1: x(c.ci[0]), x2: x(c.ci[1]), y1: mid, y2: mid, stroke: "var(--text-secondary)", "stroke-width": 2 }));
+    for (const v of c.ci) g.append(svg("line", { x1: x(v), x2: x(v), y1: mid - 4, y2: mid + 4, stroke: "var(--text-secondary)", "stroke-width": 2 }));
+    if (c.expected_rate != null) {
+      g.append(svg("line", { x1: x(c.expected_rate), x2: x(c.expected_rate), y1: mid - 12, y2: mid + 12, stroke: "var(--surface-1)", "stroke-width": 6 }));
+      g.append(svg("line", { x1: x(c.expected_rate), x2: x(c.expected_rate), y1: mid - 12, y2: mid + 12, stroke: "var(--text-primary)", "stroke-width": 2 }));
+    }
+    g.append(svg("text", { x: W - 4, y: mid + 4, "text-anchor": "end", class: "strong tick-num" }, pct(c.rate)));
+    g.append(svg("rect", { class: "hit", x: 0, y: y + 1, width: W, height: rowH - 2, rx: 4 }));
+    g.addEventListener("pointerenter", () => bar.classList.add("lift"));
+    g.addEventListener("pointerleave", () => bar.classList.remove("lift"));
+    bindTip(g, () => {
+      const rows = [tipRow(pct(c.rate), `failed ${num(c.failures)} of ${num(c.runs)} runs`, "var(--series-1)"),
+                    tipRow(`${pct(c.ci[0])} to ${pct(c.ci[1])}`, "95% interval")];
+      if (c.expected_rate != null) rows.push(tipRow(pct(c.expected_rate, 0), "rate built into the test"));
+      if (c.first_failure != null) rows.push(tipRow("run " + num(c.first_failure), "first failure"));
+      if (c.masked_by_retry != null) rows.push(tipRow(pct(c.masked_by_retry, 0), "of failures passed on the next run"));
+      return { head: c.name, rows, note: c.hints.join(" · ") };
+    });
+    root.append(g);
+  });
+  mount("rate-chart", root);
+}
+function drawRateTable() {
+  mount("rate-table", table(
+    [{ label: "Test case" }, { label: "Runs", num: 1 }, { label: "Failed", num: 1 }, { label: "Rate", num: 1 },
+     { label: "95% interval", num: 1 }, { label: "Built-in rate", num: 1 }, { label: "First failure at run", num: 1 },
+     { label: "Failures that passed on the next run", num: 1 }],
+    failing.map((c) => [c.name, num(c.runs), num(c.failures), pct(c.rate), `${pct(c.ci[0])} to ${pct(c.ci[1])}`,
+      c.expected_rate != null ? pct(c.expected_rate, 0) : "", c.first_failure != null ? num(c.first_failure) : "",
+      c.masked_by_retry != null ? pct(c.masked_by_retry, 0) : ""])));
+}
+
+/* ---------- failure strips ---------- */
+function drawStrips() {
+  if (!failing.length || !N) { mount("strip-chart", el("p", { class: "sub", text: "No test case failed." })); return; }
+  const W = widthOf("strip-chart", 680);
+  const labelW = 262, right = 12, bandH = 22, rowH = 24, bootH = 20, axisH = 24;
+  const plotW = W - labelW - right;
+  const x = (i) => labelW + (i / N) * plotW;
+  const rowsTop = bandH, rowsBottom = bandH + failing.length * rowH;
+  const H = rowsBottom + bootH + axisH;
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": "Position of every failed run, per test case. The data table below gives the counts." });
+  failing.forEach((c, r) => {
+    const y = rowsTop + r * rowH;
+    root.append(svg("line", { x1: labelW, x2: W - right, y1: y + rowH, y2: y + rowH, stroke: "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: labelW - 12, y: y + rowH / 2 + 4, "text-anchor": "end", class: "name" }, c.name));
+    let d = "";
+    for (const i of c.fails) d += `M${(x(i + 0.5)).toFixed(1)},${y + 4}v${rowH - 8}`;
+    root.append(svg("path", { d, stroke: "var(--series-1)", "stroke-width": 2, fill: "none" }));
+  });
+  root.append(svg("text", { x: labelW - 12, y: rowsBottom + 14, "text-anchor": "end", class: "muted" }, "emulator start"));
+  let boots = "";
+  for (const i of DATA.boot_starts) boots += `M${x(i).toFixed(1)},${rowsBottom + 5}v10`;
+  root.append(svg("path", { d: boots, stroke: "var(--text-muted)", "stroke-width": 1.5, fill: "none" }));
+  root.append(svg("line", { x1: labelW, x2: W - right, y1: rowsBottom + bootH, y2: rowsBottom + bootH, stroke: "var(--axis)", "stroke-width": 1 }));
+  sessionBands(root, DATA.segments, x, 2, rowsBottom + bootH, 15);
+  for (const t of ticks(N, Math.max(3, Math.floor(plotW / 110)))) {
+    if (t > N) continue;
+    root.append(svg("text", { x: x(t), y: H - 6, "text-anchor": t === 0 ? "start" : "middle", class: "tick-num muted" }, t === 0 ? "run 0" : num(t)));
+  }
+  const cross = svg("line", { y1: rowsTop, y2: rowsBottom + bootH, stroke: "var(--text-secondary)", "stroke-width": 1, visibility: "hidden" });
+  root.append(cross);
+  const hit = svg("rect", { class: "hit", x: labelW, y: 0, width: plotW, height: rowsBottom + bootH });
+  hit.addEventListener("pointermove", (e) => {
+    const box = root.getBoundingClientRect();
+    const i = Math.min(N - 1, Math.max(0, Math.floor(((e.clientX - box.left) * (W / box.width) - labelW) / plotW * N)));
+    cross.setAttribute("x1", x(i + 0.5)); cross.setAttribute("x2", x(i + 0.5)); cross.setAttribute("visibility", "visible");
+    const pos = DATA.positions[i];
+    const failed = failing.filter((c) => c.fails.includes(i));
+    const rows = failed.length ? failed.map((c) => tipRow("failed", c.name, "var(--series-1)")) : [tipRow("no failures", "in this iteration")];
+    showTip(e.clientX, e.clientY, `Run ${num(i + 1)} · ${pos.label || "no label"} · ${num(pos.since_boot)} suite runs since boot`, rows);
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+  root.append(hit);
+  mount("strip-chart", root);
+}
+function drawStripTable() {
+  const labels = DATA.segments.map((s) => s.label || "session " + s.session);
+  const headers = [{ label: "Test case" }, ...labels.map((l) => ({ label: "Failed / runs, " + l, num: 1 })), { label: "Pattern found" }];
+  const rows = failing.map((c) => {
+    const cells = DATA.segments.map((s) => {
+      const f = c.fails.filter((i) => i >= s.start && i < s.end).length;
+      return `${num(f)} / ${num(Math.min(s.end, c.runs) - s.start)}`;
+    });
+    return [c.name, ...cells, c.hints.join("; ") || "none"];
+  });
+  mount("strip-table", table(headers, rows));
+}
+
+/* ---------- durations ---------- */
+function durationFigure(c, W) {
+  const left = 46, right = 70, top = 22, plotH = 130, axisH = 24;
+  const plotW = W - left - right, H = top + plotH + axisH;
+  const n = c.runs;
+  const yMaxRaw = Math.max(...c.bins.map((b) => b[4]));
+  const yt = ticks(yMaxRaw, 4);
+  const yMax = Math.max(yt[yt.length - 1], yMaxRaw);
+  const x = (i) => left + (i / n) * plotW;
+  const y = (v) => top + plotH - (v / yMax) * plotH;
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `Median duration of ${c.name} over ${n} runs` });
+  for (const t of yt) {
+    root.append(svg("line", { x1: left, x2: W - right, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick-num muted" }, t === 0 ? "0" : t + " ms"));
+  }
+  const segs = [];
+  for (const s of DATA.segments) segs.push({ ...s, end: Math.min(s.end, n) });
+  sessionBands(root, segs, x, top - 18, top + plotH, top - 6);
+  // One sub-path per session so the line does not slope across a boundary.
+  const groups = segs.map((s) => c.bins.filter((b) => b[0] >= s.start && b[0] < s.end)).filter((g) => g.length);
+  for (const g of groups) {
+    const cx = (b) => x((b[0] + b[1] + 1) / 2);
+    let band = "";
+    g.forEach((b, i) => { band += `${i ? "L" : "M"}${cx(b).toFixed(1)},${y(b[4]).toFixed(1)}`; });
+    for (let i = g.length - 1; i >= 0; i--) band += `L${cx(g[i]).toFixed(1)},${y(g[i][2]).toFixed(1)}`;
+    root.append(svg("path", { d: band + "Z", fill: "var(--series-1)", opacity: 0.10 }));
+    let line = "";
+    g.forEach((b, i) => { line += `${i ? "L" : "M"}${cx(b).toFixed(1)},${y(b[3]).toFixed(1)}`; });
+    root.append(svg("path", { d: line, fill: "none", stroke: "var(--series-1)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  }
+  for (const s of c.steps) {
+    root.append(svg("line", { x1: x(s.at), x2: x(s.at), y1: top, y2: top + plotH, stroke: "var(--text-primary)", "stroke-width": 1 }));
+  }
+  const last = c.bins[c.bins.length - 1];
+  const lx = x((last[0] + last[1] + 1) / 2);
+  root.append(svg("circle", { cx: lx, cy: y(last[3]), r: 4, fill: "var(--series-1)", stroke: "var(--surface-1)", "stroke-width": 2 }));
+  root.append(svg("text", { x: lx + 10, y: y(last[3]) + 4, class: "strong tick-num" }, msText(last[3])));
+  for (const t of ticks(n, Math.max(3, Math.floor(plotW / 120)))) {
+    if (t > n) continue;
+    root.append(svg("text", { x: x(t), y: H - 6, "text-anchor": t === 0 ? "start" : "middle", class: "tick-num muted" }, t === 0 ? "run 0" : num(t)));
+  }
+  const cross = svg("line", { y1: top, y2: top + plotH, stroke: "var(--text-secondary)", "stroke-width": 1, visibility: "hidden" });
+  root.append(cross);
+  const hit = svg("rect", { class: "hit", x: left, y: top, width: plotW, height: plotH });
+  hit.addEventListener("pointermove", (e) => {
+    const box = root.getBoundingClientRect();
+    const i = ((e.clientX - box.left) * (W / box.width) - left) / plotW * n;
+    let best = c.bins[0];
+    for (const b of c.bins) if (Math.abs((b[0] + b[1]) / 2 - i) < Math.abs((best[0] + best[1]) / 2 - i)) best = b;
+    const bx = x((best[0] + best[1] + 1) / 2);
+    cross.setAttribute("x1", bx); cross.setAttribute("x2", bx); cross.setAttribute("visibility", "visible");
+    const pos = DATA.positions[Math.min(best[0], N - 1)];
+    showTip(e.clientX, e.clientY, `Runs ${num(best[0] + 1)} to ${num(best[1] + 1)} · ${pos ? pos.label || "no label" : ""}`,
+      [tipRow(msText(best[3]), "median", "var(--series-1)"), tipRow(`${msText(best[2])} to ${msText(best[4])}`, "middle 80% of runs")]);
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+  root.append(hit);
+  return root;
+}
+function drawDurations() {
+  const host = $("duration-charts");
+  const changed = DATA.cases.filter((c) => c.steps.length && c.bins.length);
+  if (!changed.length) { host.replaceChildren(el("p", { class: "sub", text: "No step change in duration was found." })); return; }
+  const W = Math.max(680, Math.floor(host.clientWidth));
+  // Chart the cases with the most steps; the rest are listed in the table below.
+  const MAX_CHARTS = 3;
+  const biggest = (c) => Math.max(...c.steps.map((s) => Math.abs(s.relative)));
+  changed.sort((a, b) => b.steps.length - a.steps.length || biggest(b) - biggest(a));
+  const nodes = [];
+  if (changed.length > MAX_CHARTS) {
+    const counts = new Map();
+    for (const c of changed) for (const s of c.steps) {
+      if (s.at_session_start) counts.set(s.label, (counts.get(s.label) || 0) + 1);
+    }
+    const parts = [...counts].map(([label, n]) => `${n} at the start of \u201c${label || "a session"}\u201d`);
+    nodes.push(el("p", { class: "sub", text:
+      `${changed.length} test cases changed duration` + (parts.length ? `: ${parts.join(", ")}. ` : ". ") +
+      `The ${MAX_CHARTS} with the most steps are charted; the table of all test cases lists every step.` }));
+  }
+  for (const c of changed.slice(0, MAX_CHARTS)) {
+    const summary = c.steps.map((s) =>
+      `${msText(s.before)} to ${msText(s.after)} (${s.relative >= 0 ? "+" : ""}${pct(s.relative, 0)}) at run ${num(s.at + 1)}, ` +
+      (s.at_session_start ? "the start of " : "during ") + `\u201c${s.label || "a session"}\u201d`).join("; ");
+    const fig = el("figure", null,
+      el("figcaption", null, el("b", { text: c.name }), el("span", { text: "  " + summary })),
+      el("div", { class: "chart" }, durationFigure(c, W)),
+      el("details", null, el("summary", { text: "Data table" }), el("div", { class: "table-wrap" }, table(
+        [{ label: "Runs" }, { label: "Session" }, { label: "10th percentile", num: 1 }, { label: "Median", num: 1 }, { label: "90th percentile", num: 1 }],
+        c.bins.map((b) => [`${num(b[0] + 1)} to ${num(b[1] + 1)}`, (DATA.positions[Math.min(b[0], N - 1)] || {}).label || "",
+          msText(b[2]), msText(b[3]), msText(b[4])])))));
+    nodes.push(fig);
+  }
+  host.replaceChildren(...nodes);
+}
+
+/* ---------- boots ---------- */
+const BOOT_PARTS = [
+  { key: "launch", color: "var(--series-1)", label: "before the guest kernel starts" },
+  { key: "guest", color: "var(--series-2)", label: "guest boot until its network is up" },
+  { key: "wait", color: "var(--series-3)", label: "until ffx reports the emulator ready" },
+];
+function drawBootKey() {
+  $("boot-key").replaceChildren(...BOOT_PARTS.map((p) => {
+    const sw = el("i", { class: "swatch" }); sw.style.background = p.color;
+    return el("span", null, sw, document.createTextNode(p.label));
+  }));
+}
+function drawBoots() {
+  const boots = DATA.boots.filter((b) => b.ok);
+  if (!boots.length) { mount("boot-chart", el("p", { class: "sub", text: "No emulator boots were recorded." })); return; }
+  const W = widthOf("boot-chart", 680);
+  const directLabels = W >= 900;
+  const left = 46, right = directLabels ? 236 : 16, top = 44, plotH = 190, axisH = 24;
+  const plotW = W - left - right, H = top + plotH + axisH;
+  const yMaxRaw = Math.max(...boots.map((b) => b.total)) / 1000;
+  const yt = ticks(yMaxRaw, 4);
+  const yMax = Math.max(yt[yt.length - 1], yMaxRaw);
+  const y = (s) => top + plotH - (s / yMax) * plotH;
+  const band = plotW / boots.length, colW = Math.max(2, Math.min(24, band - 2));
+  const cx = (i) => left + band * (i + 0.5);
+  const root = svg("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": "Emulator start time per boot" });
+  for (const t of yt) {
+    root.append(svg("line", { x1: left, x2: W - right, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    root.append(svg("text", { x: left - 8, y: y(t) + 4, "text-anchor": "end", class: "tick-num muted" }, t === 0 ? "0" : t + " s"));
+  }
+  const segments = [];
+  boots.forEach((b, i) => {
+    const last = segments[segments.length - 1];
+    if (last && last.label === b.label) last.end = i + 1; else segments.push({ label: b.label, session: "", start: i, end: i + 1 });
+  });
+  sessionBands(root, segments, (i) => left + band * i, top - 42, top + plotH, top - 30);
+  const slowest = boots.reduce((a, b) => (b.total > a.total ? b : a));
+  boots.forEach((b, i) => {
+    const g = svg("g", { tabindex: 0, role: "img", "aria-label": `Boot ${b.id}, ${b.label}: ${secs(b.total)}` });
+    const split = b.launch != null && b.guest != null && b.wait != null;
+    const parts = split ? BOOT_PARTS.map((p) => ({ ...p, ms: b[p.key] })) : [{ key: "total", color: "var(--text-muted)", label: "total", ms: b.total }];
+    let base = 0;
+    const marks = [];
+    parts.forEach((p, k) => {
+      const y0 = y(base / 1000), y1 = y((base + p.ms) / 1000);
+      base += p.ms;
+      const isTop = k === parts.length - 1;
+      const gap = isTop ? 0 : 2;
+      const h = Math.max(0, y0 - y1 - gap);
+      if (h <= 0) return;
+      const xL = cx(i) - colW / 2, r = isTop ? Math.min(4, colW / 2, h) : 0;
+      const d = `M${xL},${y0} v${-(h - r)} a${r},${r} 0 0 1 ${r},${-r} h${colW - 2 * r} a${r},${r} 0 0 1 ${r},${r} v${h - r} z`;
+      const mark = svg("path", { d, fill: p.color });
+      marks.push(mark); g.append(mark);
+    });
+    if (b === slowest && boots.length > 1) {
+      g.append(svg("text", { x: cx(i), y: y(b.total / 1000) - 6, "text-anchor": "middle", class: "strong tick-num" }, secs(b.total)));
+    }
+    g.append(svg("rect", { class: "hit", x: left + band * i, y: top, width: band, height: plotH }));
+    g.addEventListener("pointerenter", () => marks.forEach((m) => m.classList.add("lift")));
+    g.addEventListener("pointerleave", () => marks.forEach((m) => m.classList.remove("lift")));
+    bindTip(g, () => ({
+      head: `Boot ${b.id} · ${b.label || "no label"}`,
+      rows: [tipRow(secs(b.total), "ffx emu start, total"), ...parts.filter((p) => p.key !== "total").map((p) => tipRow(secs(p.ms), p.label, p.color))],
+    }));
+    root.append(g);
+  });
+  if (directLabels) {
+    const b = boots[boots.length - 1];
+    if (b.launch != null && b.guest != null && b.wait != null) {
+      let base = 0;
+      const lx = left + plotW + 12;
+      BOOT_PARTS.forEach((p) => {
+        const mid = y((base + b[p.key] / 2) / 1000);
+        base += b[p.key];
+        root.append(svg("text", { x: lx, y: mid + 4 }, p.label));
+      });
+    }
+  }
+  const step = Math.max(1, Math.ceil(boots.length / Math.max(4, Math.floor(plotW / 70))));
+  boots.forEach((b, i) => {
+    if (i % step === 0) root.append(svg("text", { x: cx(i), y: H - 6, "text-anchor": "middle", class: "tick-num muted" }, i === 0 ? "boot " + b.id : b.id));
+  });
+  mount("boot-chart", root);
+}
+function drawBootTable() {
+  mount("boot-table", table(
+    [{ label: "Boot", num: 1 }, { label: "Session" }, { label: "Total", num: 1 }, ...BOOT_PARTS.map((p) => ({ label: p.label, num: 1 }))],
+    DATA.boots.map((b) => [String(b.id), b.label || "", b.ok ? secs(b.total) : "failed",
+      ...BOOT_PARTS.map((p) => (b[p.key] != null ? secs(b[p.key]) : ""))])));
+}
+
+/* ---------- all cases ---------- */
+function sparkline(c) {
+  const w = 120, h = 24;
+  const root = svg("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": "Duration trend" });
+  if (c.bins.length < 2) return root;
+  const max = Math.max(...c.bins.map((b) => b[3])) || 1;
+  let d = "";
+  c.bins.forEach((b, i) => { d += `${i ? "L" : "M"}${(1 + ((b[0] + b[1]) / 2 / c.runs) * (w - 2)).toFixed(1)},${(h - 2 - (b[3] / max) * (h - 4)).toFixed(1)}`; });
+  root.append(svg("path", { d, fill: "none", stroke: "var(--text-muted)", "stroke-width": 1.5, "stroke-linejoin": "round" }));
+  return root;
+}
+function drawCaseTable() {
+  const glyph = { stable: "✓", flaky: "▲", broken: "✕" };
+  const ordered = [...failing, ...DATA.cases.filter((c) => c.failures === 0)];
+  const rows = ordered.map((c) => {
+    const status = el("span", { class: "status " + c.verdict }, el("i", { text: glyph[c.verdict], "aria-hidden": "true" }), document.createTextNode(c.verdict));
+    const notes = [];
+    if (c.expected_flaky !== (c.verdict !== "stable")) notes.push(c.expected_flaky ? "expected flaky, never failed" : "expected stable");
+    notes.push(...c.hints);
+    for (const s of c.steps) notes.push(`duration ${msText(s.before)} to ${msText(s.after)} from run ${num(s.at + 1)} (${s.label || "session"})`);
+    if (c.outliers) notes.push(`${c.outliers} run${c.outliers > 1 ? "s" : ""} over 3x the median duration`);
+    return [c.name, status, num(c.runs), num(c.failures), pct(c.rate), `${pct(c.ci[0])} to ${pct(c.ci[1])}`,
+      c.expected_flaky ? (c.expected_rate != null ? "flaky, " + pct(c.expected_rate, 0) : "flaky") : "stable",
+      c.median_ms != null ? msText(c.median_ms) : "", sparkline(c), notes.join("; ")];
+  });
+  mount("case-table", table(
+    [{ label: "Test case" }, { label: "Verdict" }, { label: "Runs", num: 1 }, { label: "Failed", num: 1 }, { label: "Rate", num: 1 },
+     { label: "95% interval", num: 1 }, { label: "Written to be" }, { label: "Median duration", num: 1 }, { label: "Duration trend" },
+     { label: "Notes", cls: "notes" }], rows));
+}
+function drawSessionTable() {
+  mount("session-table", table(
+    [{ label: "Session", num: 1 }, { label: "Condition" }, { label: "Iterations", num: 1 }, { label: "Emulator restart every", num: 1 },
+     { label: "Build variant" }, { label: "Host busy processes", num: 1 }, { label: "Started (UTC)" }, { label: "Duration", num: 1 }],
+    DATA.sessions.map((s) => {
+      const a = s.args || {};
+      const mins = s.ended ? ((new Date(s.ended) - new Date(s.started)) / 60000).toFixed(1) + " min" : "";
+      return [String(s.id), s.label || "", a.iterations != null ? num(a.iterations) : "", a.restart_every ? num(a.restart_every) + " iterations" : "never",
+        (a.define || []).join(", ") || "default", String(a.host_stress || 0), s.started.replace("T", " ").slice(0, 19), mins];
+    })));
+}
+function drawSubtitle() {
+  const s = DATA.sessions[0];
+  if (!s) return;
+  const parts = [`${num(DATA.suite_runs)} suite runs in ${DATA.sessions.length} session${DATA.sessions.length > 1 ? "s" : ""}`,
+    `Fuchsia SDK ${s.sdk}`, `product ${s.product || "unknown"}`, `${s.cpus} host CPUs, ${s.kvm ? "KVM" : "no KVM"}`,
+    `generated ${DATA.generated.replace("T", " ").slice(0, 16)} UTC`];
+  $("subtitle").textContent = parts.join(" · ");
+}
+
+function drawCharts() { drawRates(); drawStrips(); drawDurations(); drawBoots(); }
+drawSubtitle(); drawKpis(); drawBootKey(); drawCharts();
+drawRateTable(); drawStripTable(); drawBootTable(); drawCaseTable(); drawSessionTable();
+// Charts are sized to their container, so redraw whenever its width changes.
+let resizeTimer = 0, drawnWidth = document.querySelector("main").clientWidth;
+new ResizeObserver((entries) => {
+  const width = Math.round(entries[0].contentRect.width);
+  if (width === drawnWidth) return;
+  drawnWidth = width;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(drawCharts, 150);
+}).observe(document.querySelector("main"));
+</script>
+</body>
+</html>

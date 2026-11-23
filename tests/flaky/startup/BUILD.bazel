@@ -1,0 +1,84 @@
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_cc_binary",
+    "fuchsia_cc_test",
+    "fuchsia_component",
+    "fuchsia_component_manifest",
+    "fuchsia_fidl_library",
+    "fuchsia_test_component",
+    "fuchsia_test_package",
+)
+
+# A two-component integration test: the test is a client of a child component
+# that starts slowly. See startup_test.cc for the flake mechanism.
+
+fuchsia_fidl_library(
+    name = "flakelab.echo",
+    srcs = ["echo.fidl"],
+    cc_bindings = ["cpp"],
+)
+
+_ASYNC_LOOP = [
+    "@fuchsia_sdk//pkg/async-default",
+    "@fuchsia_sdk//pkg/async-loop",
+    "@fuchsia_sdk//pkg/async-loop-cpp",
+    "@fuchsia_sdk//pkg/async-loop-default",
+    "@fuchsia_sdk//pkg/fdio",
+    "@fuchsia_sdk//pkg/zx",
+]
+
+fuchsia_cc_binary(
+    name = "slow_server",
+    srcs = ["slow_server.cc"],
+    deps = _ASYNC_LOOP + [
+        ":flakelab.echo_cpp",
+        "@fuchsia_sdk//pkg/component_outgoing_cpp",
+    ],
+)
+
+fuchsia_component_manifest(
+    name = "slow_server_manifest",
+    src = "meta/slow_server.cml",
+    component_name = "slow_server",
+)
+
+fuchsia_component(
+    name = "slow_server_component",
+    manifest = ":slow_server_manifest",
+    deps = [":slow_server"],
+)
+
+fuchsia_cc_test(
+    name = "flaky_startup_test",
+    size = "small",
+    srcs = ["startup_test.cc"],
+    deps = _ASYNC_LOOP + [
+        ":flakelab.echo_cpp",
+        "@com_google_googletest//:gtest_main",
+        "@fuchsia_sdk//pkg/component_incoming_cpp",
+    ],
+)
+
+fuchsia_component_manifest(
+    name = "test_manifest",
+    src = "meta/startup_test.cml",
+    component_name = "flaky_startup_test",
+    includes = [
+        "@fuchsia_sdk//pkg/sys/testing:gtest_runner",
+        "@fuchsia_sdk//pkg/syslog:client",
+    ],
+)
+
+fuchsia_test_component(
+    name = "test_component",
+    manifest = ":test_manifest",
+    deps = [":flaky_startup_test"],
+)
+
+fuchsia_test_package(
+    name = "pkg",
+    package_name = "flakelab_startup",
+    components = [":slow_server_component"],
+    test_components = [":test_component"],
+    visibility = ["//visibility:public"],
+)
