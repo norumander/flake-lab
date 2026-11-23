@@ -302,6 +302,7 @@ python3 -m unittest discover -s flakelab -t . -p '*_test.py'
 - The host-driven suite uses Mobly and ffx, not Honeydew, so it shows the
   structure of a Lacewing test rather than Lacewing itself. Its results are a
   separate, smaller dataset from the three sessions above.
+- The CI workflow runs only the Python unit tests.
 
 ## Licence and credits
 

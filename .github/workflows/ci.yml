@@ -1,0 +1,32 @@
+# Runs the Python unit tests for the runner and the analysis code.
+#
+# The emulator sessions are not run here: they need KVM and a 240 MB product
+# bundle, and their value is in long local runs rather than in a quick check.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        # -s keeps discovery out of host_tests/, whose *_test.py files are
+        # Mobly tests that need a device.
+        run: python3 -m unittest discover -s flakelab -t . -p '*_test.py' -v
+      - name: Host tests import cleanly
+        run: |
+          python3 -m pip install -r requirements-host.txt
+          python3 -c "import host_tests.device_test, host_tests.reboot_test, host_tests.run"
+      - name: Byte-compile everything
+        run: python3 -m compileall -q flakelab host_tests experiments
